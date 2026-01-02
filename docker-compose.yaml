@@ -1,0 +1,25 @@
+version: "3.7"
+services:
+  pocketbase:
+    build:
+      context: .                  # 構建的根目錄 (當前目錄)
+      dockerfile: dockerfile/dockerfile  # 指向那個放在子資料夾的檔案
+      args:
+        PB_VERSION: ${PB_VERSION}
+        PB_PORT: ${PB_PORT}
+    expose:
+      - "${PB_PORT}"
+    volumes:
+      # 把容器內的 pb_data 掛載出來，確保資料永久保存
+      - ./pb_data:/pb/pb_data
+      - ./pb_public:/pb/pb_public
+    # 這裡可以限制只有 50MB 記憶體，對 PocketBase 來說綽綽有餘
+    mem_limit: 128m
+    container_name: baby-album-backend
+    restart: always
+    networks:
+      - demo
+
+networks:
+  demo:
+    external: true
