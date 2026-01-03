@@ -7,8 +7,11 @@ services:
       args:
         PB_VERSION: ${PB_VERSION}
         PB_PORT: ${PB_PORT}
-    expose:
-      - "${PB_PORT}"
+    # 如果需要直接暴露端口，請取消註釋以下行並註釋掉 expose:
+    ports:
+      - "${PB_PORT}:${PB_PORT}"
+    # expose:
+      # - "${PB_PORT}"
     volumes:
       # 把容器內的 pb_data 掛載出來，確保資料永久保存
       - ./pb_data:/pb/pb_data
@@ -18,9 +21,4 @@ services:
     mem_limit: 128m
     container_name: baby-album-backend
     restart: always
-    networks:
-      - demo
 
-networks:
-  demo:
-    external: true
