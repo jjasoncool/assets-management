@@ -1,6 +1,6 @@
-# Baby Album Project
+# Assets Management Project
 
-這是一個使用 PocketBase 作為後端的相簿網站專案。
+這是一個使用 PocketBase 作為後端的資產管理網站專案。
 
 ## 快速啟動
 
