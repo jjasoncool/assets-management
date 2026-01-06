@@ -2,23 +2,53 @@ version: "3.7"
 services:
   pocketbase:
     build:
-      context: .                  # 構建的根目錄 (當前目錄)
-      dockerfile: dockerfile/dockerfile  # 指向那個放在子資料夾的檔案
+      context: ./dockerfile/pocketbase  # 直接指向 pocketbase 資料夾
       args:
         PB_VERSION: ${PB_VERSION}
-        PB_PORT: ${PB_PORT}
-    # 如果需要直接暴露端口，請取消註釋以下行並註釋掉 expose:
-    ports:
-      - "${PB_PORT}:${PB_PORT}"
-    # expose:
-      # - "${PB_PORT}"
+    expose:
+      - "8090"
     volumes:
       # 把容器內的 pb_data 掛載出來，確保資料永久保存
       - ./pb_data:/pb/pb_data
-      - ./pb_public:/pb/pb_public
       - ./pb_migrations:/pb/pb_migrations
     # 這裡可以限制只有 50MB 記憶體，對 PocketBase 來說綽綽有餘
     mem_limit: 128m
-    container_name: baby-album-backend
+    container_name: pb-backend
     restart: always
+    networks:
+      - app-network
 
+  svelte-app:
+    build:
+      context: .  # 根目錄
+      dockerfile: ./dockerfile/svelte/Dockerfile
+      args:
+        APP_ENV: ${APP_ENV}  # dev for development, prod for production
+    expose:
+      - "3000"  # 只在網路內可用
+    container_name: svelte-frontend
+    restart: always
+    volumes:
+      # 將主機的 frontend 掛載到容器的 /app
+      - ./frontend:/app
+      # 隔離容器內的環境，這是解決 "__SERVER__" 錯誤的核心
+      - /app/node_modules
+      - /app/.svelte-kit
+    networks:
+      - app-network
+
+  nginx:
+    image: nginx:alpine  # 使用官方映像，無需 build
+    ports:
+      - "${WEB_PORT:-80}:80"  # env 關注開放 host 的 port
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf  # mount 配置
+    depends_on:
+      - pocketbase
+      - svelte-app
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

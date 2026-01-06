@@ -2,8 +2,6 @@
 FROM alpine:latest
 
 ARG PB_VERSION=0.35.0
-ARG PB_PORT=8090
-ENV PB_PORT=${PB_PORT}
 
 # 安裝必要的工具 (unzip, ca-certificates 用於 HTTPS 下載)
 RUN apk add --no-cache \
@@ -16,7 +14,7 @@ ADD https://github.com/pocketbase/pocketbase/releases/download/v${PB_VERSION}/po
 RUN unzip /tmp/pb.zip -d /pb/
 
 # 開放 Port
-EXPOSE ${PB_PORT}
+EXPOSE 8090
 
 # 啟動指令 (資料庫存在 /pb/pb_data)
-CMD /pb/pocketbase serve --http=0.0.0.0:${PB_PORT}
+CMD /pb/pocketbase serve --http=0.0.0.0:8090
