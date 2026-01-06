@@ -12,13 +12,13 @@ importers:
         specifier: ^6.7.2
         version: 6.7.2
       '@fullcalendar/core':
-        specifier: ^6.1.15
+        specifier: ^6.1.20
         version: 6.1.20
       '@fullcalendar/daygrid':
-        specifier: ^6.1.15
+        specifier: ^6.1.20
         version: 6.1.20(@fullcalendar/core@6.1.20)
       '@fullcalendar/interaction':
-        specifier: ^6.1.15
+        specifier: ^6.1.20
         version: 6.1.20(@fullcalendar/core@6.1.20)
       '@mdi/font':
         specifier: ^7.4.47
@@ -27,7 +27,7 @@ importers:
         specifier: ^5.3.8
         version: 5.3.8(@popperjs/core@2.11.8)
       chart.js:
-        specifier: ^4.4.7
+        specifier: ^4.5.1
         version: 4.5.1
       jquery:
         specifier: ^3.7.1

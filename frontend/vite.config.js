@@ -3,7 +3,17 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
 	plugins: [sveltekit()],
+	resolve: {
+		alias: {
+			'$styles': './src/styles',
+			'@': './src'
+		}
+	},
 	server: {
-		allowedHosts: ['assets.egst.com.tw']
+		host: '0.0.0.0',
+		allowedHosts: ['assets.egst.com.tw'],
+		hmr: {
+			port: 3000
+		}
 	}
 });
