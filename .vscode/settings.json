@@ -1,0 +1,6 @@
+{
+  "typescript.preferences.includePackageJsonAutoImports": "auto",
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "typescript.workspaceSymbols.excludeLibrarySymbols": false,
+  "typescript.preferences.preferTypeOnlyAutoImports": true
+}

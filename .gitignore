@@ -1,2 +1,6 @@
-pb_data/
 .env
+pb_data/
+templates/
+frontend/node_modules/
+frontend/.svelte-kit/
+frontend/.pnpm-store/

@@ -31,9 +31,6 @@ services:
     volumes:
       # 將主機的 frontend 掛載到容器的 /app
       - ./frontend:/app
-      # 隔離容器內的環境，這是解決 "__SERVER__" 錯誤的核心
-      - /app/node_modules
-      - /app/.svelte-kit
     networks:
       - app-network
 
