@@ -12,8 +12,9 @@ export default defineConfig({
 	server: {
 		host: '0.0.0.0',
 		allowedHosts: ['assets.egst.com.tw'],
-		hmr: {
-			port: 3000
+		watch: {
+			// 減少不必要的文件監視
+			ignored: ['**/node_modules/**', '**/.git/**', '**/dist/**']
 		}
 	}
 });
