@@ -5,8 +5,15 @@ import { logout, getCurrentUser, updateUserProfile, changePassword } from '$lib/
 import { pb } from '$lib/pocketbase';
 import Navbar from '$lib/components/Navbar.svelte';
 import Footer from '$lib/components/Footer.svelte';
+import { bs, Swal } from '$lib/stores';
 
 let currentUser: any = null;
+let bsInstance: any = null;
+let SwalInstance: any = null;
+
+// 訂閱 store
+bs.subscribe(value => bsInstance = value);
+Swal.subscribe(value => SwalInstance = value);
 
 function handleLogout() {
   logout();
@@ -20,7 +27,6 @@ let bio = '';
 
 // Profile 更新相關
 let isUpdatingProfile = false;
-let profileUpdateMessage = '';
 let selectedAvatar: File | null = null;
 
 // 密碼更改相關
@@ -29,7 +35,6 @@ let oldPassword = '';
 let newPassword = '';
 let confirmPassword = '';
 let isChangingPassword = false;
-let passwordChangeMessage = '';
 
 onMount(() => {
   // 獲取當前用戶資訊
@@ -43,9 +48,9 @@ onMount(() => {
   }
 
   // 設置 modal 事件處理
-  const modal = document.getElementById('changePasswordModal');
-  if (modal) {
-    modal.addEventListener('hidden.bs.modal', clearPasswordForm);
+  const modalElement = document.getElementById('changePasswordModal');
+  if (modalElement && bsInstance) {
+    modalElement.addEventListener('hidden.bs.modal', clearPasswordForm);
   }
 });
 
@@ -54,7 +59,6 @@ async function handleUpdateProfile() {
   if (!currentUser) return;
 
   isUpdatingProfile = true;
-  profileUpdateMessage = '';
 
   try {
     const updateData: { name?: string; avatar?: File } = {};
@@ -68,7 +72,12 @@ async function handleUpdateProfile() {
     }
 
     if (Object.keys(updateData).length === 0) {
-      profileUpdateMessage = '沒有需要更新的內容';
+      if (SwalInstance) await SwalInstance.fire({
+        icon: 'info',
+        title: '沒有需要更新的內容',
+        timer: 2000,
+        showConfirmButton: false
+      });
       isUpdatingProfile = false;
       return;
     }
@@ -81,9 +90,18 @@ async function handleUpdateProfile() {
     const fileInput = document.getElementById('fileInput') as HTMLInputElement;
     if (fileInput) fileInput.value = '';
 
-    profileUpdateMessage = '個人資料更新成功！';
+    if (SwalInstance) await SwalInstance.fire({
+      icon: 'success',
+      title: '個人資料更新成功！',
+      timer: 2000,
+      showConfirmButton: false
+    });
   } catch (error: any) {
-    profileUpdateMessage = `更新失敗: ${error.message || '未知錯誤'}`;
+    if (SwalInstance) await SwalInstance.fire({
+      icon: 'error',
+      title: '更新失敗',
+      text: error.message || '未知錯誤'
+    });
   } finally {
     isUpdatingProfile = false;
   }
@@ -101,33 +119,57 @@ function handleAvatarSelect(event: Event) {
 // 更改密碼
 async function handleChangePassword() {
   if (newPassword !== confirmPassword) {
-    passwordChangeMessage = '新密碼與確認密碼不相符';
+    if (SwalInstance) await SwalInstance.fire({
+      icon: 'error',
+      title: '錯誤',
+      text: '新密碼與確認密碼不相符'
+    });
     return;
   }
 
   if (newPassword.length < 8) {
-    passwordChangeMessage = '新密碼長度至少需要8個字符';
+    if (SwalInstance) await SwalInstance.fire({
+      icon: 'error',
+      title: '錯誤',
+      text: '新密碼長度至少需要8個字符'
+    });
     return;
   }
 
   isChangingPassword = true;
-  passwordChangeMessage = '';
 
   try {
     await changePassword(oldPassword, newPassword);
 
-    // 清空表單並關閉 modal
+    // 清空表單
     clearPasswordForm();
-    // 關閉 modal
-    const modal = document.getElementById('changePasswordModal');
-    if (modal) {
-      const bsModal = new (window as any).bootstrap.Modal(modal);
-      bsModal.hide();
+
+    // 關閉 modal：使用動態載入的 bs 變數
+    const modalElement = document.getElementById('changePasswordModal');
+    if (modalElement && bsInstance) {
+      const bsModal = bsInstance.Modal.getInstance(modalElement);
+      if (bsModal) {
+        bsModal.hide();
+      }
     }
 
-    passwordChangeMessage = '密碼更改成功！';
+    if (SwalInstance) await SwalInstance.fire({
+      icon: 'success',
+      title: '密碼更改成功！',
+      timer: 2000,
+      showConfirmButton: false
+    });
+
+    // 密碼更改成功後執行登出
+    setTimeout(() => {
+      handleLogout();
+    }, 1500);
   } catch (error: any) {
-    passwordChangeMessage = `密碼更改失敗: ${error.message || '未知錯誤'}`;
+    if (SwalInstance) await SwalInstance.fire({
+      icon: 'error',
+      title: '密碼更改失敗',
+      text: error.message || '未知錯誤'
+    });
   } finally {
     isChangingPassword = false;
   }
@@ -138,7 +180,6 @@ function clearPasswordForm() {
   oldPassword = '';
   newPassword = '';
   confirmPassword = '';
-  passwordChangeMessage = '';
 }
 </script>
 
@@ -190,12 +231,6 @@ function clearPasswordForm() {
                             </div>
                             <div class="row">
                                 <div class="col-12">
-                                    {#if profileUpdateMessage}
-                                        <div class="alert alert-info mb-3">
-                                            {profileUpdateMessage}
-                                        </div>
-                                    {/if}
-
                                     <form class="tm-signup-form" on:submit|preventDefault={handleUpdateProfile}>
                                         <div class="form-group">
                                             <label for="name">Full Name</label>
@@ -223,8 +258,6 @@ function clearPasswordForm() {
                                             </div>
                                         </div>
                                     </form>
-
-
                                 </div>
                             </div>
                         </div>
@@ -268,34 +301,29 @@ function clearPasswordForm() {
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                {#if passwordChangeMessage}
-                    <div class="alert alert-info mb-3">
-                        {passwordChangeMessage}
-                    </div>
-                {/if}
                 <form on:submit|preventDefault={handleChangePassword}>
                     <div class="mb-3">
-                        <label for="modalOldPassword" class="form-label">Current Password</label>
+                        <label for="modalOldPassword" class="form-label">目前密碼</label>
                         <input bind:value={oldPassword} type="password" class="form-control" id="modalOldPassword" required>
                     </div>
                     <div class="mb-3">
-                        <label for="modalNewPassword" class="form-label">New Password</label>
+                        <label for="modalNewPassword" class="form-label">新密碼</label>
                         <input bind:value={newPassword} type="password" class="form-control" id="modalNewPassword" required minlength="8">
                     </div>
                     <div class="mb-3">
-                        <label for="modalConfirmPassword" class="form-label">Confirm New Password</label>
+                        <label for="modalConfirmPassword" class="form-label">確認新密碼</label>
                         <input bind:value={confirmPassword} type="password" class="form-control" id="modalConfirmPassword" required>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" class="btn btn-primary" disabled={isChangingPassword} on:click={handleChangePassword}>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" disabled={isChangingPassword} on:click={handleChangePassword}>
                     {#if isChangingPassword}
                         <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                        Changing...
+                        更改中...
                     {:else}
-                        Change Password
+                        更改密碼
                     {/if}
                 </button>
             </div>
