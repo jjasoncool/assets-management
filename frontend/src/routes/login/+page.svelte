@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { userAuth } from '$lib/pocketbase';
+	import { userAuth, isAuthenticated } from '$lib/services/userService';
 	import { onMount } from 'svelte';
-	import { isAuthenticated } from '$lib/pocketbase';
 
 	let email = '';
 	let password = '';
@@ -16,9 +15,26 @@
 		}
 	});
 
+	// Email 格式驗證
+	function validateEmail(email: string): boolean {
+		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+		return emailRegex.test(email);
+	}
+
 	async function handleLogin() {
+		// 增強輸入驗證
 		if (!email || !password) {
 			error = '請輸入郵箱和密碼';
+			return;
+		}
+
+		if (!validateEmail(email)) {
+			error = '請輸入有效的郵箱地址';
+			return;
+		}
+
+		if (password.length < 6) {
+			error = '密碼長度至少需要6個字符';
 			return;
 		}
 
@@ -29,7 +45,9 @@
 			await userAuth(email, password);
 			goto('/');
 		} catch (err: any) {
-			error = err.message || '登入失敗，請檢查郵箱和密碼';
+			// 模糊化錯誤信息，避免洩露具體錯誤
+			error = '登入失敗，請檢查您的登入資訊';
+			console.error('Login error:', err); // 保留詳細錯誤給開發者
 		} finally {
 			loading = false;
 		}
@@ -37,7 +55,7 @@
 </script>
 
 <div class="bg03">
-	<div class="container">
+	<div class="container-xl">
 		<div class="row tm-mt-big">
 			<div class="col-12 mx-auto tm-login-col">
 				<div class="bg-white tm-block">

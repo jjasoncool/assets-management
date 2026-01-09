@@ -1,7 +1,7 @@
 <script lang="ts">
-import { goto } from '$app/navigation';
 import { onMount } from 'svelte';
-import { isAuthenticated, getCurrentUser, logout } from '$lib/pocketbase';
+import { goto } from '$app/navigation';
+import { logout, isAuthenticated, getCurrentUser } from '$lib/services/userService';
 import Navbar from '$lib/components/Navbar.svelte';
 import Footer from '$lib/components/Footer.svelte';
 import { Calendar } from '@fullcalendar/core';
@@ -13,29 +13,26 @@ let currentUser: any = null;
 let calendar: Calendar;
 
 onMount(() => {
-  if (!isAuthenticated()) {
-    goto('/login');
-  } else {
-    currentUser = getCurrentUser();
+  // 獲取當前用戶資訊
+  currentUser = getCurrentUser();
 
-    // Initialize calendar after DOM is ready
-    setTimeout(() => {
-      const calendarEl = document.getElementById('calendar');
-      if (calendarEl) {
-        calendar = new Calendar(calendarEl, {
-          plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
-          initialView: 'dayGridMonth',
-          headerToolbar: {
-            left: 'prev,next today',
-            center: 'title',
-            right: 'dayGridMonth,timeGridWeek,timeGridDay'
-          },
-          height: 'auto'
-        });
-        calendar.render();
-      }
-    }, 100);
-  }
+  // Initialize calendar after DOM is ready
+  setTimeout(() => {
+    const calendarEl = document.getElementById('calendar');
+    if (calendarEl) {
+      calendar = new Calendar(calendarEl, {
+        plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
+        initialView: 'dayGridMonth',
+        headerToolbar: {
+          left: 'prev,next today',
+          center: 'title',
+          right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        height: 'auto'
+      });
+      calendar.render();
+    }
+  }, 100);
 });
 
 function handleLogout() {
@@ -48,16 +45,34 @@ function handleLogout() {
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,400,600">
 </svelte:head>
 
-{#if isAuthenticated() && currentUser}
-
 <div id="reportsPage">
     <div class="" id="home">
-        <div class="container">
+        <div class="container-xl">
             <div class="row">
                 <div class="col-12">
                     <Navbar {handleLogout} {currentUser} />
                 </div>
             </div>
+
+            <!-- 登入狀態指示器 -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="alert alert-info" role="alert">
+                        <strong>登入狀態:</strong>
+                        {#if isAuthenticated()}
+                            <span class="text-success">已登入</span>
+                            {#if currentUser}
+                                - 用戶: {currentUser.email || '未知'}
+                            {/if}
+                        {:else}
+                            <span class="text-danger">未登入</span>
+                        {/if}
+                        <br>
+                        <small>API URL: {typeof window !== 'undefined' ? window.location.origin : 'SSR'}</small>
+                    </div>
+                </div>
+            </div>
+
             <!-- row -->
             <div class="row tm-content-row tm-mt-big">
                 <div class="col-12 col-lg-6 col-xl-5">
@@ -148,8 +163,3 @@ function handleLogout() {
         </div>
     </div>
 </div>
-{:else}
-<div class="container">
-<p>正在檢查登入狀態...</p>
-</div>
-{/if}

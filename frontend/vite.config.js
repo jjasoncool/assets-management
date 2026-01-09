@@ -14,7 +14,7 @@ export default defineConfig({
 		allowedHosts: ['assets.egst.com.tw'],
 		watch: {
 			// 減少不必要的文件監視
-			ignored: ['**/node_modules/**', '**/.git/**', '**/dist/**']
+			ignored: ['**/node_modules/**', '**/.pnpm-store/**', '**/.git/**', '**/dist/**']
 		}
 	}
 });
