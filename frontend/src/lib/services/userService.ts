@@ -109,4 +109,3 @@ export async function changePasswordAsAdmin(userId: string, newPassword: string)
     throw error;
   }
 }
-    logger.log('密碼更改成功');

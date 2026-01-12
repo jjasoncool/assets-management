@@ -1,44 +1,43 @@
 <script lang="ts">
-import { onMount } from 'svelte';
-import { goto } from '$app/navigation';
-import { logout, isAuthenticated, getCurrentUser } from '$lib/services/userService';
-import Navbar from '$lib/components/Navbar.svelte';
-import Footer from '$lib/components/Footer.svelte';
-import { Calendar } from '@fullcalendar/core';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import timeGridPlugin from '@fullcalendar/timegrid';
-import interactionPlugin from '@fullcalendar/interaction';
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { logout, isAuthenticated, getCurrentUser } from '$lib/services/userService';
+	import Navbar from '$lib/components/Navbar.svelte';
+	import Footer from '$lib/components/Footer.svelte';
+	import { Calendar } from '@fullcalendar/core';
+	import dayGridPlugin from '@fullcalendar/daygrid';
+	import timeGridPlugin from '@fullcalendar/timegrid';
+	import interactionPlugin from '@fullcalendar/interaction';
 
-let currentUser: any = null;
-let calendar: Calendar;
+	// currentUser 由 layout 提供
+	export let data: any;
+	let currentUser = data?.currentUser || getCurrentUser();
+	let calendar: Calendar;
 
-onMount(() => {
-  // 獲取當前用戶資訊
-  currentUser = getCurrentUser();
+	onMount(async () => {
+		// Initialize calendar after DOM is ready
+		setTimeout(() => {
+			const calendarEl = document.getElementById('calendar');
+			if (calendarEl) {
+				calendar = new Calendar(calendarEl, {
+					plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
+					initialView: 'dayGridMonth',
+					headerToolbar: {
+						left: 'prev,next today',
+						center: 'title',
+						right: 'dayGridMonth,timeGridWeek,timeGridDay'
+					},
+					height: 'auto'
+				});
+				calendar.render();
+			}
+		}, 100);
+	});
 
-  // Initialize calendar after DOM is ready
-  setTimeout(() => {
-    const calendarEl = document.getElementById('calendar');
-    if (calendarEl) {
-      calendar = new Calendar(calendarEl, {
-        plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
-        initialView: 'dayGridMonth',
-        headerToolbar: {
-          left: 'prev,next today',
-          center: 'title',
-          right: 'dayGridMonth,timeGridWeek,timeGridDay'
-        },
-        height: 'auto'
-      });
-      calendar.render();
-    }
-  }, 100);
-});
-
-function handleLogout() {
-  logout();
-  goto('/login');
-}
+	function handleLogout() {
+		logout();
+		goto('/login');
+	}
 </script>
 
 <svelte:head>

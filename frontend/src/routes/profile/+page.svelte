@@ -208,6 +208,16 @@ function handleAvatarSelect(event: Event) {
 
 // 更改密碼
 async function handleChangePassword() {
+  // 檢查用戶是否已登入
+  if (!currentUser) {
+    if (SwalInstance) await SwalInstance.fire({
+      icon: 'error',
+      title: '錯誤',
+      text: '請先登入後再更改密碼'
+    });
+    return;
+  }
+
   if (newPassword !== confirmPassword) {
     if (SwalInstance) await SwalInstance.fire({
       icon: 'error',
