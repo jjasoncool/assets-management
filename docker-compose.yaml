@@ -24,6 +24,7 @@ services:
       dockerfile: ./dockerfile/svelte/Dockerfile
       args:
         APP_ENV: ${APP_ENV}  # dev for development, prod for production
+        VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS}  # 允許的主機
     expose:
       - "3000"  # 只在網路內可用
     container_name: svelte-frontend

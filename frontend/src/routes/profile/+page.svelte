@@ -365,7 +365,7 @@ function clearPasswordForm() {
                             <button type="button" class="btn btn-sm btn-outline-danger position-absolute" style="top: 0; right: 0; border-radius: 50%; width: 30px; height: 30px; padding: 0;" on:click={() => { selectedAvatar = null; avatarPreview = null; removeAvatar = false; (document.getElementById('fileInput') as HTMLInputElement).value = ''; }} aria-label="取消頭像選擇" title="取消頭像選擇">
                                 <i class="mdi mdi-close"></i>
                             </button>
-                        {:else if currentUser?.avatar && currentUser.avatar !== ''}
+                        {:else if currentUser?.avatar && currentUser.avatar !== '' && !removeAvatar}
                             <img src="{pb.files.getURL(currentUser, currentUser.avatar)}" alt="Profile" class="img-fluid rounded-circle mb-3" style="width: 120px; height: 120px; object-fit: cover;">
                             <button type="button" class="btn btn-sm btn-outline-danger position-absolute" style="top: 0; right: 0; border-radius: 50%; width: 30px; height: 30px; padding: 0;" on:click={() => { removeAvatar = true; selectedAvatar = null; avatarPreview = null; }} aria-label="刪除頭像" title="刪除頭像">
                                 <i class="mdi mdi-delete"></i>
