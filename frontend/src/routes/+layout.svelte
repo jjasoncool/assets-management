@@ -2,7 +2,7 @@
 	import '../styles/global.css';
 	import '../styles/tooplate.css';
 	import 'bootstrap/dist/css/bootstrap.min.css';
-	import '@fortawesome/fontawesome-free/css/all.min.css';
+	import '@mdi/font/css/materialdesignicons.min.css';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';

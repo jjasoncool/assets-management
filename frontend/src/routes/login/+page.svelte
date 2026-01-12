@@ -61,7 +61,7 @@
 				<div class="bg-white tm-block">
 					<div class="row">
 						<div class="col-12 text-center">
-							<i class="mdi mdi-view-dashboard mdi-36px tm-site-icon text-center"></i>
+							<i class="mdi mdi-view-dashboard" style="font-size: 3rem;"></i>
 							<h2 class="tm-block-title mt-3">Login</h2>
 						</div>
 					</div>

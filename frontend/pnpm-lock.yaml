@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@fortawesome/fontawesome-free':
-        specifier: ^6.7.2
-        version: 6.7.2
       '@fullcalendar/core':
         specifier: ^6.1.20
         version: 6.1.20
@@ -215,10 +212,6 @@ packages:
     engines: {node: '>=12'}
     cpu: [x64]
     os: [win32]
-
-  '@fortawesome/fontawesome-free@6.7.2':
-    resolution: {integrity: sha512-JUOtgFW6k9u4Y+xeIaEiLr3+cjoUPiAuLXoyKOJSia6Duzb7pq+A76P9ZdPDoAoxHdHzq6gE9/jKBGXlZT8FbA==}
-    engines: {node: '>=6'}
 
   '@fullcalendar/core@6.1.20':
     resolution: {integrity: sha512-1cukXLlePFiJ8YKXn/4tMKsy0etxYLCkXk8nUCFi11nRONF2Ba2CD5b21/ovtOO2tL6afTJfwmc1ed3HG7eB1g==}
@@ -819,8 +812,6 @@ snapshots:
 
   '@esbuild/win32-x64@0.21.5':
     optional: true
-
-  '@fortawesome/fontawesome-free@6.7.2': {}
 
   '@fullcalendar/core@6.1.20':
     dependencies:

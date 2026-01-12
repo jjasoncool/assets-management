@@ -42,7 +42,7 @@ export let currentUser: any;
                     {#if currentUser?.avatar && currentUser.avatar !== ''}
                         <img src="{pb.files.getURL(currentUser, currentUser.avatar)}" alt="Avatar" class="rounded-circle me-2" style="width: 24px; height: 24px; object-fit: cover;">
                     {:else}
-                        <i class="mdi mdi-account-outline me-2"></i>
+                        <i class="mdi mdi-account-outline" style="font-size: 1.2rem;"></i>
                     {/if}
                     <span class="d-inline-block text-truncate" style="max-width: 200px; min-width: 120px;">{currentUser?.email || 'User'}</span>
                 </a>

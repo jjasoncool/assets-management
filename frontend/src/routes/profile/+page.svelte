@@ -372,7 +372,7 @@ function clearPasswordForm() {
                             </button>
                         {:else}
                             <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 120px; height: 120px;">
-                                <i class="mdi mdi-account mdi-36px text-secondary"></i>
+                                <i class="mdi mdi-account" style="font-size: 3rem;"></i>
                             </div>
                         {/if}
                     </div>
