@@ -38,6 +38,7 @@ services:
     image: nginx:alpine  # 使用官方映像，無需 build
     ports:
       - "${WEB_PORT:-80}:80"  # env 關注開放 host 的 port
+    restart: always
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf  # mount 配置
     depends_on:

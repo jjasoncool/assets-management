@@ -28,6 +28,9 @@ let bio = '';
 // Profile 更新相關
 let isUpdatingProfile = false;
 let selectedAvatar: File | null = null;
+let avatarPreview: string | null = null;
+let removeAvatar = false;
+let isUpdatingAvatar = false;
 
 // 密碼更改相關
 let showPasswordForm = false;
@@ -54,21 +57,17 @@ onMount(() => {
   }
 });
 
-// 更新 profile
+// 更新 profile (只更新名字)
 async function handleUpdateProfile() {
   if (!currentUser) return;
 
   isUpdatingProfile = true;
 
   try {
-    const updateData: { name?: string; avatar?: File } = {};
+    const updateData: { name?: string; avatar?: File | string } = {};
 
     if (name !== (currentUser.name || '')) {
       updateData.name = name;
-    }
-
-    if (selectedAvatar) {
-      updateData.avatar = selectedAvatar;
     }
 
     if (Object.keys(updateData).length === 0) {
@@ -84,11 +83,6 @@ async function handleUpdateProfile() {
 
     const updatedUser = await updateUserProfile(updateData);
     currentUser = updatedUser;
-    selectedAvatar = null;
-
-    // 清空文件輸入
-    const fileInput = document.getElementById('fileInput') as HTMLInputElement;
-    if (fileInput) fileInput.value = '';
 
     if (SwalInstance) await SwalInstance.fire({
       icon: 'success',
@@ -107,13 +101,109 @@ async function handleUpdateProfile() {
   }
 }
 
+// 單獨更新頭像
+async function handleUpdateAvatar() {
+  if (!currentUser) return;
+
+  isUpdatingAvatar = true;
+
+  try {
+    const updateData: { avatar?: File | string | null } = {};
+
+    if (selectedAvatar) {
+      updateData.avatar = selectedAvatar;
+    } else if (removeAvatar) {
+      // 刪除頭像：設置為 null
+      updateData.avatar = null;
+    } else {
+      if (SwalInstance) await SwalInstance.fire({
+        icon: 'info',
+        title: '沒有需要更新的內容',
+        timer: 2000,
+        showConfirmButton: false
+      });
+      isUpdatingAvatar = false;
+      return;
+    }
+
+    const updatedUser = await updateUserProfile(updateData);
+
+    // 確保 UI 正確更新
+    currentUser = { ...updatedUser };
+    selectedAvatar = null;
+    avatarPreview = null;
+    removeAvatar = false;
+
+    // 清空文件輸入
+    const fileInput = document.getElementById('fileInput') as HTMLInputElement;
+    if (fileInput) fileInput.value = '';
+
+    if (SwalInstance) await SwalInstance.fire({
+      icon: 'success',
+      title: '頭像更新成功！',
+      timer: 2000,
+      showConfirmButton: false
+    });
+  } catch (error: any) {
+    if (SwalInstance) await SwalInstance.fire({
+      icon: 'error',
+      title: '更新失敗',
+      text: error.message || '未知錯誤'
+    });
+  } finally {
+    isUpdatingAvatar = false;
+  }
+}
+
 // 處理頭像文件選擇
 function handleAvatarSelect(event: Event) {
   const target = event.target as HTMLInputElement;
   const file = target.files?.[0];
-  if (file) {
-    selectedAvatar = file;
+
+  if (!file) {
+    selectedAvatar = null;
+    avatarPreview = null;
+    return;
   }
+
+  // 驗證文件類型
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/svg+xml', 'image/gif', 'image/webp'];
+  if (!allowedTypes.includes(file.type)) {
+    if (SwalInstance) SwalInstance.fire({
+      icon: 'error',
+      title: '無效的文件類型',
+      text: '只允許上傳 JPEG, PNG, SVG, GIF 或 WebP 格式的圖片'
+    });
+    // 清空輸入
+    target.value = '';
+    selectedAvatar = null;
+    avatarPreview = null;
+    return;
+  }
+
+  // 驗證文件大小 (5MB 限制)
+  const maxSize = 5 * 1024 * 1024; // 5MB
+  if (file.size > maxSize) {
+    if (SwalInstance) SwalInstance.fire({
+      icon: 'error',
+      title: '文件過大',
+      text: '圖片大小不能超過 5MB'
+    });
+    // 清空輸入
+    target.value = '';
+    selectedAvatar = null;
+    avatarPreview = null;
+    return;
+  }
+
+  selectedAvatar = file;
+
+  // 生成預覽
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    avatarPreview = e.target?.result as string;
+  };
+  reader.readAsDataURL(file);
 }
 
 // 更改密碼
@@ -269,12 +359,20 @@ function clearPasswordForm() {
             <div class="col-12 col-lg-4 col-xl-4">
                 <div class="bg-white tm-block">
                     <h2 class="tm-block-title">Profile Image</h2>
-                    <div class="text-center">
-                        {#if currentUser?.avatar}
+                    <div class="text-center position-relative">
+                        {#if avatarPreview}
+                            <img src="{avatarPreview}" alt="Preview" class="img-fluid rounded-circle mb-3" style="width: 120px; height: 120px; object-fit: cover; border: 2px solid #007bff;">
+                            <button type="button" class="btn btn-sm btn-outline-danger position-absolute" style="top: 0; right: 0; border-radius: 50%; width: 30px; height: 30px; padding: 0;" on:click={() => { selectedAvatar = null; avatarPreview = null; removeAvatar = false; (document.getElementById('fileInput') as HTMLInputElement).value = ''; }} aria-label="取消頭像選擇" title="取消頭像選擇">
+                                <i class="mdi mdi-close"></i>
+                            </button>
+                        {:else if currentUser?.avatar && currentUser.avatar !== ''}
                             <img src="{pb.files.getURL(currentUser, currentUser.avatar)}" alt="Profile" class="img-fluid rounded-circle mb-3" style="width: 120px; height: 120px; object-fit: cover;">
+                            <button type="button" class="btn btn-sm btn-outline-danger position-absolute" style="top: 0; right: 0; border-radius: 50%; width: 30px; height: 30px; padding: 0;" on:click={() => { removeAvatar = true; selectedAvatar = null; avatarPreview = null; }} aria-label="刪除頭像" title="刪除頭像">
+                                <i class="mdi mdi-delete"></i>
+                            </button>
                         {:else}
                             <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 120px; height: 120px;">
-                                <i class="fas fa-user fa-3x text-secondary"></i>
+                                <i class="mdi mdi-account mdi-36px text-secondary"></i>
                             </div>
                         {/if}
                     </div>
@@ -285,6 +383,18 @@ function clearPasswordForm() {
                             <small class="text-muted d-block mt-2">Selected: {selectedAvatar.name}</small>
                         {/if}
                     </div>
+                    {#if selectedAvatar || removeAvatar}
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-success d-block mx-auto" on:click={handleUpdateAvatar} disabled={isUpdatingAvatar}>
+                                {#if isUpdatingAvatar}
+                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                    Saving...
+                                {:else}
+                                    Save Avatar
+                                {/if}
+                            </button>
+                        </div>
+                    {/if}
                 </div>
             </div>
         </div>

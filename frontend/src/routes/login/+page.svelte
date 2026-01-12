@@ -61,7 +61,7 @@
 				<div class="bg-white tm-block">
 					<div class="row">
 						<div class="col-12 text-center">
-							<i class="fas fa-3x fa-tachometer-alt tm-site-icon text-center"></i>
+							<i class="mdi mdi-view-dashboard mdi-36px tm-site-icon text-center"></i>
 							<h2 class="tm-block-title mt-3">Login</h2>
 						</div>
 					</div>
@@ -93,7 +93,7 @@
 								<div class="input-group mt-3">
 									<button type="submit" class="btn btn-primary d-inline-block mx-auto" disabled={loading}>
 										{#if loading}
-											<i class="fas fa-spinner fa-spin mr-2"></i>Login...
+											<i class="mdi mdi-loading mdi-spin me-2"></i>Login...
 										{:else}
 											Login
 										{/if}

@@ -30,7 +30,7 @@ export function getCurrentUser() {
 }
 
 // 用戶 profile 相關
-export async function updateUserProfile(data: { name?: string; avatar?: File }) {
+export async function updateUserProfile(data: { name?: string; avatar?: File | string | null }) {
   try {
     const user = pb.authStore.model;
     if (!user) throw new Error('未登入');
@@ -41,12 +41,18 @@ export async function updateUserProfile(data: { name?: string; avatar?: File }) 
       formData.append('name', data.name);
     }
 
-    if (data.avatar) {
-      formData.append('avatar', data.avatar);
+    if (data.avatar !== undefined) {
+      if (data.avatar === null) {
+        // 刪除頭像：設置為空字符串
+        formData.append('avatar', '');
+      } else {
+        formData.append('avatar', data.avatar);
+      }
     }
 
     const updatedRecord = await pb.collection('users').update(user.id, formData);
     logger.log('Profile 更新成功:', updatedRecord);
+    logger.log('Avatar 字段值:', updatedRecord.avatar);
 
     // 更新本地 auth store
     pb.authStore.save(pb.authStore.token, updatedRecord);

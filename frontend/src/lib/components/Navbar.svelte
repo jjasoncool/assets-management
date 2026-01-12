@@ -1,4 +1,6 @@
 <script lang="ts">
+import { pb } from '../pocketbase';
+
 export let handleLogout: () => void;
 export let currentUser: any;
 </script>
@@ -6,7 +8,7 @@ export let currentUser: any;
 <nav class="navbar navbar-expand-lg navbar-light bg-light">
     <div class="container-fluid">
         <a class="navbar-brand d-flex align-items-center" href="/">
-            <i class="fas fa-tachometer-alt me-2"></i>
+            <i class="mdi mdi-view-dashboard me-2"></i>
             <span class="fw-bold">Asset Management</span>
         </a>
 
@@ -37,16 +39,20 @@ export let currentUser: any;
             <ul class="navbar-nav">
             <li class="nav-item dropdown">
                 <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="far fa-user me-2"></i>
+                    {#if currentUser?.avatar && currentUser.avatar !== ''}
+                        <img src="{pb.files.getURL(currentUser, currentUser.avatar)}" alt="Avatar" class="rounded-circle me-2" style="width: 24px; height: 24px; object-fit: cover;">
+                    {:else}
+                        <i class="mdi mdi-account-outline me-2"></i>
+                    {/if}
                     <span class="d-inline-block text-truncate" style="max-width: 200px; min-width: 120px;">{currentUser?.email || 'User'}</span>
                 </a>
                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
                     <li><a class="dropdown-item" href="/profile">
-                            <i class="fas fa-user me-2"></i>Profile
+                            <i class="mdi mdi-account me-2"></i>Profile
                         </a></li>
                     <li><hr class="dropdown-divider"></li>
                     <li><a class="dropdown-item text-danger" href="/login" on:click={handleLogout}>
-                            <i class="fas fa-sign-out-alt me-2"></i>Logout
+                            <i class="mdi mdi-logout me-2"></i>Logout
                         </a></li>
                 </ul>
             </li>
