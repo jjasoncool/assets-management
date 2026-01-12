@@ -15,7 +15,7 @@ docker-compose up -d
 
 ```bash
 # 語法：docker exec -it <container_name> /pb/pocketbase superuser create <email> <password>
-docker exec -it baby-album-backend /pb/pocketbase superuser create admin@example.com 1234567890
+docker exec -it backend /pb/pocketbase superuser create admin@example.com 1234567890
 ```
 
 > **注意**：請將 `admin@example.com` 與 `1234567890` 替換為您實際想要使用的帳號與密碼 (密碼至少需 8 碼)。
