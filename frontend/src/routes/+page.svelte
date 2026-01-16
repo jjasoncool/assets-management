@@ -8,13 +8,156 @@
 	import dayGridPlugin from '@fullcalendar/daygrid';
 	import timeGridPlugin from '@fullcalendar/timegrid';
 	import interactionPlugin from '@fullcalendar/interaction';
+	import { getBorrowRecords, type BorrowRecord } from '$lib/services/assetService';
 
 	// currentUser 由 layout 提供
 	export let data: any;
 	let currentUser = data?.currentUser || getCurrentUser();
 	let calendar: Calendar;
+	let borrowRecords: BorrowRecord[] = [];
 
 	onMount(async () => {
+		// 使用假數據替代 API 調用 (2026年數據)
+		borrowRecords = [
+			{
+				id: '1',
+				assetId: 'asset1',
+				userId: 'user1',
+				borrowDate: '2026-01-10T10:00:00.000Z',
+				expectedReturnDate: '2026-01-15T17:00:00.000Z',
+				actualReturnDate: '2026-01-13T16:30:00.000Z',
+				status: 'returned',
+				notes: '順利歸還',
+				created: '2026-01-10T10:00:00.000Z',
+				updated: '2026-01-13T16:30:00.000Z',
+				asset: {
+					id: 'asset1',
+					name: 'MacBook Pro 16"',
+					description: '開發用筆電',
+					category: '電子設備',
+					status: 'available',
+					location: '辦公室 A101',
+					serialNumber: 'MBP2026001',
+					created: '2026-01-01T00:00:00.000Z',
+					updated: '2026-01-10T10:00:00.000Z'
+				},
+				user: {
+					id: 'user1',
+					name: '張小明',
+					email: 'zhang@example.com'
+				}
+			},
+			{
+				id: '2',
+				assetId: 'asset2',
+				userId: 'user2',
+				borrowDate: '2026-01-15T09:00:00.000Z',
+				expectedReturnDate: '2026-01-20T17:00:00.000Z',
+				status: 'borrowed',
+				notes: '專案開發使用',
+				created: '2026-01-15T09:00:00.000Z',
+				updated: '2026-01-15T09:00:00.000Z',
+				asset: {
+					id: 'asset2',
+					name: 'iPad Pro 12.9"',
+					description: '設計用平板',
+					category: '電子設備',
+					status: 'borrowed',
+					location: '辦公室 A102',
+					serialNumber: 'IPAD2026002',
+					created: '2026-01-01T00:00:00.000Z',
+					updated: '2026-01-15T09:00:00.000Z'
+				},
+				user: {
+					id: 'user2',
+					name: '李小華',
+					email: 'li@example.com'
+				}
+			},
+			{
+				id: '3',
+				assetId: 'asset3',
+				userId: 'user1',
+				borrowDate: '2026-01-16T14:00:00.000Z',
+				expectedReturnDate: '2026-01-18T17:00:00.000Z',
+				status: 'borrowed',
+				notes: '會議演示',
+				created: '2026-01-16T14:00:00.000Z',
+				updated: '2026-01-16T14:00:00.000Z',
+				asset: {
+					id: 'asset3',
+					name: '投影機 Epson EB-1780W',
+					description: '會議室投影機',
+					category: '視聽設備',
+					status: 'borrowed',
+					location: '會議室 B201',
+					serialNumber: 'PROJ2026003',
+					created: '2026-01-01T00:00:00.000Z',
+					updated: '2026-01-16T14:00:00.000Z'
+				},
+				user: {
+					id: 'user1',
+					name: '張小明',
+					email: 'zhang@example.com'
+				}
+			},
+			{
+				id: '4',
+				assetId: 'asset4',
+				userId: 'user3',
+				borrowDate: '2026-01-05T11:00:00.000Z',
+				expectedReturnDate: '2026-01-10T17:00:00.000Z',
+				actualReturnDate: '2026-01-09T15:45:00.000Z',
+				status: 'returned',
+				notes: '順利完成',
+				created: '2026-01-05T11:00:00.000Z',
+				updated: '2026-01-09T15:45:00.000Z',
+				asset: {
+					id: 'asset4',
+					name: '無線麥克風系統',
+					description: '會議用麥克風',
+					category: '視聽設備',
+					status: 'available',
+					location: '會議室 B201',
+					serialNumber: 'MIC2026004',
+					created: '2026-01-01T00:00:00.000Z',
+					updated: '2026-01-09T15:45:00.000Z'
+				},
+				user: {
+					id: 'user3',
+					name: '王小美',
+					email: 'wang@example.com'
+				}
+			},
+			{
+				id: '5',
+				assetId: 'asset5',
+				userId: 'user2',
+				borrowDate: '2026-01-20T08:30:00.000Z',
+				expectedReturnDate: '2026-01-25T17:00:00.000Z',
+				status: 'borrowed',
+				notes: '長期專案使用',
+				created: '2026-01-20T08:30:00.000Z',
+				updated: '2026-01-20T08:30:00.000Z',
+				asset: {
+					id: 'asset5',
+					name: '數位相機 Canon EOS R5',
+					description: '專業攝影設備',
+					category: '攝影設備',
+					status: 'borrowed',
+					location: '攝影工作室',
+					serialNumber: 'CAM2026005',
+					created: '2026-01-01T00:00:00.000Z',
+					updated: '2026-01-20T08:30:00.000Z'
+				},
+				user: {
+					id: 'user2',
+					name: '李小華',
+					email: 'li@example.com'
+				}
+			}
+		];
+
 		// Initialize calendar after DOM is ready
 		setTimeout(() => {
 			const calendarEl = document.getElementById('calendar');
@@ -27,7 +170,14 @@
 						center: 'title',
 						right: 'dayGridMonth,timeGridWeek,timeGridDay'
 					},
-					height: 'auto'
+					height: 'auto',
+					events: borrowRecords.map(record => ({
+						title: `${record.asset?.name || '未知物品'} (${record.user?.email || '未知用戶'})`,
+						start: record.borrowDate,
+						end: record.actualReturnDate || record.expectedReturnDate,
+						color: record.status === 'borrowed' ? '#dc3545' : '#28a745',
+						textColor: '#ffffff'
+					}))
 				});
 				calendar.render();
 			}
@@ -72,89 +222,55 @@
                 </div>
             </div>
 
-            <!-- row -->
+            <!-- 借用記錄與行事曆 row -->
             <div class="row tm-content-row tm-mt-big">
-                <div class="col-12 col-lg-6 col-xl-5">
+                <!-- 左邊借用記錄區域 -->
+                <div class="col-12 col-xl-3">
                     <div class="bg-white tm-block h-100">
-                        <h2 class="tm-block-title">Latest Hits</h2>
-                        <canvas id="lineChart"></canvas>
-                    </div>
-                </div>
-                <div class="col-12 col-lg-6 col-xl-5">
-                    <div class="bg-white tm-block h-100">
-                        <h2 class="tm-block-title">Performance</h2>
-                        <canvas id="barChart"></canvas>
-                    </div>
-                </div>
-                <div class="col-12 col-xl-2">
-                    <div class="bg-white tm-block h-100">
-                        <canvas id="pieChart" class="chartjs-render-monitor"></canvas>
+                        <h2 class="tm-block-title">借用記錄</h2>
+                        <div class="tm-list-group tm-list-group-pad-big">
+                            {#each borrowRecords.slice(0, 10) as record}
+                                <div class="tm-list-group-item d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <strong>{record.asset?.name || '未知物品'}</strong>
+                                        <br>
+                                        <small class="text-muted">
+                                            借出: {new Date(record.borrowDate).toLocaleDateString('zh-TW')}
+                                            {#if record.actualReturnDate}
+                                                <br>歸還: {new Date(record.actualReturnDate).toLocaleDateString('zh-TW')}
+                                            {:else if record.expectedReturnDate}
+                                                <br>預計歸還: {new Date(record.expectedReturnDate).toLocaleDateString('zh-TW')}
+                                            {/if}
+                                        </small>
+                                        <br>
+                                        <span class="badge badge-{record.status === 'borrowed' ? 'danger' : 'success'}">
+                                            {record.status === 'borrowed' ? '借出中' : '已歸還'}
+                                        </span>
+                                    </div>
+                                </div>
+                            {/each}
+                            {#if borrowRecords.length === 0}
+                                <div class="text-center text-muted py-4">
+                                    目前沒有借用記錄
+                                </div>
+                            {/if}
+                        </div>
                     </div>
                 </div>
 
-                <div class="col-12 col-lg-6 col-xl-5">
+                <!-- 右邊行事曆區域 -->
+                <div class="col-12 col-xl-9">
                     <div class="bg-white tm-block h-100">
-                        <div class="row">
-                            <div class="col-8">
-                                <h2 class="tm-block-title d-inline-block">Top Product List</h2>
-                            </div>
-                            <div class="col-4 text-right">
-                                <a href="products.html" class="tm-link-black">View All</a>
-                            </div>
-                        </div>
-                        <ol class="tm-list-group tm-list-group-alternate-color tm-list-group-pad-big">
-                            <li class="tm-list-group-item">
-                                Donec eget libero
-                            </li>
-                            <li class="tm-list-group-item">
-                                Nunc luctus suscipit elementum
-                            </li>
-                            <li class="tm-list-group-item">
-                                Maecenas eu justo maximus
-                            </li>
-                            <li class="tm-list-group-item">
-                                Pellentesque auctor urna nunc
-                            </li>
-                            <li class="tm-list-group-item">
-                                Sit amet aliquam lorem efficitur
-                            </li>
-                            <li class="tm-list-group-item">
-                                Pellentesque auctor urna nunc
-                            </li>
-                            <li class="tm-list-group-item">
-                                Sit amet aliquam lorem efficitur
-                            </li>
-                        </ol>
-                    </div>
-                </div>
-                <div class="col-12 col-lg-6 col-xl-5">
-                    <div class="bg-white tm-block h-100">
-                        <h2 class="tm-block-title">Calendar</h2>
+                        <h2 class="tm-block-title">資產管理行事曆</h2>
                         <div id="calendar"></div>
                         <div class="row mt-4">
-                            <div class="col-12 text-right">
-                                <a href="#" class="tm-link-black">View Schedules</a>
+                            <div class="col-12">
+                                <small class="text-muted">
+                                    <span class="badge mr-2" style="background-color: #dc3545; color: white;">紅色</span>借出中
+                                    <span class="badge ml-3" style="background-color: #28a745; color: white;">綠色</span>已歸還
+                                </small>
                             </div>
                         </div>
-                    </div>
-                </div>
-                <div class="col-12 col-xl-2">
-                    <div class="bg-white tm-block h-100">
-                        <h2 class="tm-block-title">Upcoming Tasks</h2>
-                        <ol class="tm-list-group">
-                            <li class="tm-list-group-item">List of tasks</li>
-                            <li class="tm-list-group-item">Lorem ipsum doloe</li>
-                            <li class="tm-list-group-item">Read reports</li>
-                            <li class="tm-list-group-item">Write email</li>
-
-                            <li class="tm-list-group-item">Call customers</li>
-                            <li class="tm-list-group-item">Go to meeting</li>
-                            <li class="tm-list-group-item">Weekly plan</li>
-                            <li class="tm-list-group-item">Ask for feedback</li>
-
-                            <li class="tm-list-group-item">Meet Supervisor</li>
-                            <li class="tm-list-group-item">Company trip</li>
-                        </ol>
                     </div>
                 </div>
             </div>
