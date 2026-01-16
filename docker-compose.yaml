@@ -28,6 +28,8 @@ services:
       - "3000"  # 只在網路內可用
     container_name: svelte-frontend
     restart: always
+    environment:
+      - POCKETBASE_URL=${POCKETBASE_URL}  # 服務端使用的 PocketBase URL
     volumes:
       # 將主機的 frontend 掛載到容器的 /app
       - ./frontend:/app

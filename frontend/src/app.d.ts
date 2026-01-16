@@ -3,7 +3,10 @@
 declare global {
 	namespace App {
 		// interface Error {}
-		// interface Locals {}
+		interface Locals {
+			pb: import('pocketbase/cjs').default;
+			user: any;
+		}
 		// interface PageData {}
 		// interface Platform {}
 	}

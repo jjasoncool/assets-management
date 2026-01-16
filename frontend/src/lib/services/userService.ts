@@ -5,10 +5,10 @@ import { logger } from '../utils/logger';
 export async function userAuth(email: string, password: string) {
   try {
     const authData = await pb.collection('users').authWithPassword(email, password);
-    logger.log('登入成功:', authData);
+    logger.log('登入成功');
     return authData;
   } catch (error) {
-    logger.error('用戶認證失敗:', error);
+    logger.error('用戶認證失敗');
     throw error;
   }
 }
@@ -16,11 +16,32 @@ export async function userAuth(email: string, password: string) {
 export function logout() {
   logger.log('用戶登出');
   pb.authStore.clear();
+  // 清除 cookie 和 sessionStorage
+  document.cookie = 'pb_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+  sessionStorage.removeItem('pb_auth');
 }
 
 export function isAuthenticated() {
-  const isValid = pb.authStore.isValid;
-  logger.log('檢查登入狀態:', isValid, pb.authStore.model);
+  // 檢查多個來源：authStore + sessionStorage + cookie
+  const authStoreValid = pb.authStore.isValid;
+  const hasSessionData = typeof sessionStorage !== 'undefined' &&
+    !!sessionStorage.getItem('pb_auth');
+  const hasCookie = typeof document !== 'undefined' &&
+    document.cookie.includes('pb_auth=');
+
+  const isValid = authStoreValid || hasSessionData || hasCookie;
+
+  // 開發環境顯示詳細檢查結果
+  if (typeof window !== 'undefined' && import.meta.env.DEV) {
+    console.log('🔍 [CLIENT] 登入狀態檢查:', {
+      isValid,
+      authStore: authStoreValid,
+      sessionStorage: hasSessionData,
+      cookie: hasCookie,
+      cookieContent: document.cookie.substring(0, 100) + '...'
+    });
+  }
+
   return isValid;
 }
 

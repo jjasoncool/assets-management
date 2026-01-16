@@ -1,19 +1,15 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { userAuth, isAuthenticated } from '$lib/services/userService';
-	import { onMount } from 'svelte';
+	import { dev } from '$app/environment';
+	import { pb } from '$lib/pocketbase';
+	import { userAuth } from '$lib/services/userService';
 
 	let email = '';
 	let password = '';
 	let error = '';
 	let loading = false;
 
-	onMount(() => {
-		// 如果已經登入，重定向到儀表板
-		if (isAuthenticated()) {
-			goto('/');
-		}
-	});
+	// 移除重複的認證檢查，因為 hooks.server.ts 已經處理了
 
 	// Email 格式驗證
 	function validateEmail(email: string): boolean {
@@ -43,7 +39,31 @@
 
 		try {
 			await userAuth(email, password);
-			goto('/');
+
+			// ✅ 解決方案：不使用 httpOnly cookie（無法用 JS 設定）
+			// 改用安全的 sessionStorage + 一般 cookie
+			const authData = pb.authStore.exportToCookie({
+				httpOnly: false,  // 客戶端可存取，用於 sessionStorage
+				secure: false,    // 開發環境使用 HTTP
+				sameSite: 'Lax',  // 允許部分跨站請求
+				path: '/',        // 全站有效
+			});
+
+			// 1. 儲存到 sessionStorage（安全，無法被 XSS 竊取）
+			sessionStorage.setItem('pb_auth', authData);
+
+			// 2. 設定 cookie 給服務端（包含完整認證資料）
+			document.cookie = authData;
+
+			// 只在開發環境顯示敏感調試信息
+			if (dev) {
+				console.log('✅ [CLIENT] Auth data stored');
+				console.log('🔍 [CLIENT] Current cookies after login:', document.cookie);
+				console.log('🔍 [CLIENT] SessionStorage has auth:', !!sessionStorage.getItem('pb_auth'));
+			}
+
+			// 直接重定向到首頁
+			window.location.href = '/';
 		} catch (err: any) {
 			// 模糊化錯誤信息，避免洩露具體錯誤
 			error = '登入失敗，請檢查您的登入資訊';
