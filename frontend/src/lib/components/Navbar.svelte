@@ -8,7 +8,7 @@ export let currentUser: any;
 <nav class="navbar navbar-expand-lg navbar-light bg-light">
     <div class="container-fluid">
         <a class="navbar-brand d-flex align-items-center" href="/">
-            <i class="mdi mdi-view-dashboard me-2"></i>
+            <i class="mdi mdi-office-building me-2"></i>
             <span class="fw-bold">Asset Management</span>
         </a>
 
@@ -19,20 +19,26 @@ export let currentUser: any;
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                 <li class="nav-item">
-                    <a class="nav-link active" aria-current="page" href="/">Dashboard</a>
+                    <a class="nav-link active" aria-current="page" href="/"><i class="mdi mdi-view-dashboard me-1"></i>Dashboard</a>
                 </li>
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        Reports
+                    <a class="nav-link dropdown-toggle" href="#" id="assetsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="mdi mdi-package-variant-closed me-1"></i>資產管理
                     </a>
-                    <ul class="dropdown-menu" aria-labelledby="navbarDropdown">
-                        <li><a class="dropdown-item" href="#">Daily Report</a></li>
-                        <li><a class="dropdown-item" href="#">Weekly Report</a></li>
-                        <li><a class="dropdown-item" href="#">Yearly Report</a></li>
+                    <ul class="dropdown-menu" aria-labelledby="assetsDropdown">
+                        <li><a class="dropdown-item" href="/assets"><i class="mdi mdi-format-list-bulleted me-2"></i>資產清單</a></li>
+                        <li><a class="dropdown-item" href="/assets/add"><i class="mdi mdi-plus me-2"></i>新增資產</a></li>
                     </ul>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="products.html">Products</a>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="borrowDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="mdi mdi-hand-heart me-1"></i>借用管理
+                    </a>
+                    <ul class="dropdown-menu" aria-labelledby="borrowDropdown">
+                        <li><a class="dropdown-item" href="/borrow/requests"><i class="mdi mdi-clipboard-plus me-2"></i>借用請求</a></li>
+                        <li><a class="dropdown-item" href="/borrow/my"><i class="mdi mdi-account-clock me-2"></i>我的借用</a></li>
+                        <li><a class="dropdown-item" href="/return"><i class="mdi mdi-undo-variant me-2"></i>歸還資產</a></li>
+                    </ul>
                 </li>
             </ul>
 
