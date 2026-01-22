@@ -35,7 +35,7 @@
 					name: 'MacBook Pro 16"',
 					description: '開發用筆電',
 					category: '電子設備',
-					status: 'available',
+					status: 'active',
 					location: '辦公室 A101',
 					serialNumber: 'MBP2026001',
 					created: '2026-01-01T00:00:00.000Z',
@@ -117,7 +117,7 @@
 					name: '無線麥克風系統',
 					description: '會議用麥克風',
 					category: '視聽設備',
-					status: 'available',
+					status: 'active',
 					location: '會議室 B201',
 					serialNumber: 'MIC2026004',
 					created: '2026-01-01T00:00:00.000Z',
@@ -194,87 +194,77 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,400,600">
 </svelte:head>
 
-<div id="reportsPage">
-    <div class="" id="home">
-        <div class="container-xl">
-            <div class="row">
-                <div class="col-12">
-                    <Navbar {handleLogout} {currentUser} />
-                </div>
-            </div>
+<div class="min-vh-100 pb-5">
+    <div class="container-fluid px-4">
+        <Navbar {handleLogout} {currentUser} />
 
-            <!-- 登入狀態指示器 -->
-            <div class="row">
-                <div class="col-12">
-                    <div class="alert alert-info" role="alert">
-                        <strong>登入狀態:</strong>
-                        {#if isAuthenticated()}
-                            <span class="text-success">已登入</span>
-                            {#if currentUser}
-                                - 用戶: {currentUser.email || '未知'}
-                            {/if}
-                        {:else}
-                            <span class="text-danger">未登入</span>
-                        {/if}
-                        <br>
-                        <small>API URL: {typeof window !== 'undefined' ? window.location.origin : 'SSR'}</small>
+        <!-- 登入狀態指示器 -->
+        <div class="alert alert-info mb-4">
+            <strong>登入狀態:</strong>
+            {#if isAuthenticated()}
+                <span class="text-success">已登入</span>
+                {#if currentUser}
+                    - 用戶: {currentUser.email || '未知'}
+                {/if}
+            {:else}
+                <span class="text-danger">未登入</span>
+            {/if}
+            <br>
+            <small>API URL: {typeof window !== 'undefined' ? window.location.origin : 'SSR'}</small>
+        </div>
+
+        <div class="row g-4">
+            <!-- 借用記錄區域 -->
+            <div class="col-12 col-xl-4">
+                <div class="card shadow-sm bg-white bg-opacity-90 h-100">
+                    <div class="card-header bg-white bg-opacity-90">
+                        <h5 class="card-title mb-0 fw-bold">借用記錄</h5>
                     </div>
-                </div>
-            </div>
-
-            <!-- 借用記錄與行事曆 row -->
-            <div class="row tm-content-row tm-mt-big">
-                <!-- 左邊借用記錄區域 -->
-                <div class="col-12 col-xl-3">
-                    <div class="bg-white tm-block h-100">
-                        <h2 class="tm-block-title">借用記錄</h2>
-                        <div class="tm-list-group tm-list-group-pad-big">
-                            {#each borrowRecords.slice(0, 10) as record}
-                                <div class="tm-list-group-item d-flex justify-content-between align-items-start">
-                                    <div>
-                                        <strong>{record.asset?.name || '未知物品'}</strong>
-                                        <br>
-                                        <small class="text-muted">
-                                            借出: {new Date(record.borrowDate).toLocaleDateString('zh-TW')}
-                                            {#if record.actualReturnDate}
-                                                <br>歸還: {new Date(record.actualReturnDate).toLocaleDateString('zh-TW')}
-                                            {:else if record.expectedReturnDate}
-                                                <br>預計歸還: {new Date(record.expectedReturnDate).toLocaleDateString('zh-TW')}
-                                            {/if}
-                                        </small>
-                                        <br>
-                                        <span class="badge badge-{record.status === 'borrowed' ? 'danger' : 'success'}">
-                                            {record.status === 'borrowed' ? '借出中' : '已歸還'}
-                                        </span>
+                    <div class="card-body">
+                        {#each borrowRecords.slice(0, 10) as record}
+                            <div class="d-flex justify-content-between align-items-start mb-3 pb-3 border-bottom">
+                                <div class="flex-grow-1">
+                                    <div class="fw-semibold">{record.asset?.name || '未知物品'}</div>
+                                    <div class="small text-muted">
+                                        借出: {new Date(record.borrowDate).toLocaleDateString('zh-TW')}
+                                        {#if record.actualReturnDate}
+                                            <br>歸還: {new Date(record.actualReturnDate).toLocaleDateString('zh-TW')}
+                                        {:else if record.expectedReturnDate}
+                                            <br>預計歸還: {new Date(record.expectedReturnDate).toLocaleDateString('zh-TW')}
+                                        {/if}
                                     </div>
+                                    <span class="badge {record.status === 'borrowed' ? 'text-bg-danger' : 'text-bg-success'} rounded-pill mt-1">
+                                        {record.status === 'borrowed' ? '借出中' : '已歸還'}
+                                    </span>
                                 </div>
-                            {/each}
-                            {#if borrowRecords.length === 0}
-                                <div class="text-center text-muted py-4">
-                                    目前沒有借用記錄
-                                </div>
-                            {/if}
-                        </div>
+                            </div>
+                        {/each}
+                        {#if borrowRecords.length === 0}
+                            <div class="text-center text-muted py-4">
+                                目前沒有借用記錄
+                            </div>
+                        {/if}
                     </div>
                 </div>
+            </div>
 
-                <!-- 右邊行事曆區域 -->
-                <div class="col-12 col-xl-9">
-                    <div class="bg-white tm-block h-100">
-                        <h2 class="tm-block-title">資產管理行事曆</h2>
+            <!-- 行事曆區域 -->
+            <div class="col-12 col-xl-8">
+                <div class="card shadow-sm bg-white bg-opacity-90 h-100">
+                    <div class="card-header bg-white bg-opacity-90">
+                        <h5 class="card-title mb-0 fw-bold">資產管理行事曆</h5>
+                    </div>
+                    <div class="card-body">
                         <div id="calendar"></div>
-                        <div class="row mt-4">
-                            <div class="col-12">
-                                <small class="text-muted">
-                                    <span class="badge mr-2" style="background-color: #dc3545; color: white;">紅色</span>借出中
-                                    <span class="badge ml-3" style="background-color: #28a745; color: white;">綠色</span>已歸還
-                                </small>
-                            </div>
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                <span class="badge text-bg-danger me-2">紅色</span>借出中
+                                <span class="badge text-bg-success ms-3">綠色</span>已歸還
+                            </small>
                         </div>
                     </div>
                 </div>
             </div>
-            <Footer />
         </div>
     </div>
 </div>

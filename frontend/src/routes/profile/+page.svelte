@@ -283,39 +283,36 @@ function clearPasswordForm() {
 }
 </script>
 
-<div class="bg03">
-    <div class="container-xl">
-        <div class="row">
-            <div class="col-12">
-                <Navbar {handleLogout} {currentUser} />
-            </div>
-        </div>
-        <!-- row -->
-        <div class="row tm-content-row tm-mt-big">
-            <!-- Profile Information and Edit Profile in one wider column -->
-            <div class="col-12 col-lg-8 col-xl-8">
-                <div class="row">
+<div class="min-vh-100 pb-5">
+    <div class="container-fluid px-4">
+        <Navbar {handleLogout} {currentUser} />
+
+        <div class="row g-4">
+            <!-- Profile Information and Edit Profile -->
+            <div class="col-12 col-lg-8">
+                <div class="row g-4">
                     <!-- Profile Information -->
                     <div class="col-12 col-lg-6">
-                        <div class="bg-white tm-block">
-                            <div class="row">
-                                <div class="col-12">
-                                    <h2 class="tm-block-title d-inline-block">Profile Information</h2>
-                                </div>
+                        <div class="card shadow-sm bg-white bg-opacity-90">
+                            <div class="card-header bg-white bg-opacity-90">
+                                <h5 class="card-title mb-0 fw-bold">個人資料</h5>
                             </div>
-                            <div class="tm-list-group tm-list-group-alternate-color tm-list-group-pad-big">
-                                <div class="tm-list-group-item">
-                                    <strong>Name:</strong> {currentUser?.name || 'Not set'}
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <strong class="text-muted">姓名:</strong>
+                                    <div>{currentUser?.name || '未設定'}</div>
                                 </div>
-                                <div class="tm-list-group-item">
-                                    <strong>Email:</strong> {currentUser?.email || 'Not set'}
+                                <div class="mb-3">
+                                    <strong class="text-muted">信箱:</strong>
+                                    <div>{currentUser?.email || '未設定'}</div>
                                 </div>
-
-                                <div class="tm-list-group-item">
-                                    <strong>Created:</strong> {currentUser?.created ? new Date(currentUser.created).toLocaleDateString() : 'Not set'}
+                                <div class="mb-3">
+                                    <strong class="text-muted">建立時間:</strong>
+                                    <div>{currentUser?.created ? new Date(currentUser.created).toLocaleDateString('zh-TW') : '未設定'}</div>
                                 </div>
-                                <div class="tm-list-group-item">
-                                    <strong>Last Updated:</strong> {currentUser?.updated ? new Date(currentUser.updated).toLocaleDateString() : 'Not set'}
+                                <div class="mb-3">
+                                    <strong class="text-muted">最後更新:</strong>
+                                    <div>{currentUser?.updated ? new Date(currentUser.updated).toLocaleDateString('zh-TW') : '未設定'}</div>
                                 </div>
                             </div>
                         </div>
@@ -323,92 +320,89 @@ function clearPasswordForm() {
 
                     <!-- Edit Profile -->
                     <div class="col-12 col-lg-6">
-                        <div class="bg-white tm-block">
-                            <div class="row">
-                                <div class="col-12">
-                                    <h2 class="tm-block-title">Edit Profile</h2>
-                                </div>
+                        <div class="card shadow-sm bg-white bg-opacity-90">
+                            <div class="card-header bg-white bg-opacity-90">
+                                <h5 class="card-title mb-0 fw-bold">編輯個人資料</h5>
                             </div>
-                            <div class="row">
-                                <div class="col-12">
-                                    <form class="tm-signup-form" on:submit|preventDefault={handleUpdateProfile}>
-                                        <div class="form-group">
-                                            <label for="name">Full Name</label>
-                                            <input bind:value={name} placeholder="Enter your full name" id="name" name="name" type="text" class="form-control">
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="email">Email Address (Read-only)</label>
-                                            <input bind:value={email} placeholder="Enter your email" id="email" name="email" type="email" class="form-control" readonly>
-                                        </div>
-                                        <div class="row">
-                                            <div class="col-12 col-sm-6">
-                                                <button type="submit" class="btn btn-primary" disabled={isUpdatingProfile}>
-                                                    {#if isUpdatingProfile}
-                                                        <span class="spinner-border spinner-border-sm" role="status"></span>
-                                                        Updating...
-                                                    {:else}
-                                                        Update Profile
-                                                    {/if}
-                                                </button>
-                                            </div>
-                                            <div class="col-12 col-sm-6 tm-btn-right">
-                                                <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#changePasswordModal">
-                                                    Change Password
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </form>
-                                </div>
+                            <div class="card-body">
+                                <form on:submit|preventDefault={handleUpdateProfile}>
+                                    <div class="mb-3">
+                                        <label for="name" class="form-label">姓名</label>
+                                        <input bind:value={name} placeholder="輸入您的姓名" id="name" name="name" type="text" class="form-control">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="email" class="form-label">信箱 (唯讀)</label>
+                                        <input bind:value={email} placeholder="輸入您的信箱" id="email" name="email" type="email" class="form-control" readonly>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button type="submit" class="btn btn-primary flex-fill" disabled={isUpdatingProfile}>
+                                            {#if isUpdatingProfile}
+                                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                更新中...
+                                            {:else}
+                                                更新個人資料
+                                            {/if}
+                                        </button>
+                                        <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#changePasswordModal">
+                                            更改密碼
+                                        </button>
+                                    </div>
+                                </form>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Profile Image in separate column -->
-            <div class="col-12 col-lg-4 col-xl-4">
-                <div class="bg-white tm-block">
-                    <h2 class="tm-block-title">Profile Image</h2>
-                    <div class="text-center position-relative">
-                        {#if avatarPreview}
-                            <img src="{avatarPreview}" alt="Preview" class="img-fluid rounded-circle mb-3" style="width: 120px; height: 120px; object-fit: cover; border: 2px solid #007bff;">
-                            <button type="button" class="btn btn-sm btn-outline-danger position-absolute" style="top: 0; right: 0; border-radius: 50%; width: 30px; height: 30px; padding: 0;" on:click={() => { selectedAvatar = null; avatarPreview = null; removeAvatar = false; (document.getElementById('fileInput') as HTMLInputElement).value = ''; }} aria-label="取消頭像選擇" title="取消頭像選擇">
-                                <i class="mdi mdi-close"></i>
-                            </button>
-                        {:else if currentUser?.avatar && currentUser.avatar !== '' && !removeAvatar}
-                            <img src="{pb.files.getURL(currentUser, currentUser.avatar)}" alt="Profile" class="img-fluid rounded-circle mb-3" style="width: 120px; height: 120px; object-fit: cover;">
-                            <button type="button" class="btn btn-sm btn-outline-danger position-absolute" style="top: 0; right: 0; border-radius: 50%; width: 30px; height: 30px; padding: 0;" on:click={() => { removeAvatar = true; selectedAvatar = null; avatarPreview = null; }} aria-label="刪除頭像" title="刪除頭像">
-                                <i class="mdi mdi-delete"></i>
-                            </button>
-                        {:else}
-                            <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 120px; height: 120px;">
-                                <i class="mdi mdi-account" style="font-size: 3rem;"></i>
-                            </div>
-                        {/if}
+            <!-- Profile Image -->
+            <div class="col-12 col-lg-4">
+                <div class="card shadow-sm bg-white bg-opacity-90">
+                    <div class="card-header bg-white bg-opacity-90">
+                        <h5 class="card-title mb-0 fw-bold">個人頭像</h5>
                     </div>
-                    <div class="custom-file mt-3 mb-3">
-                        <input id="fileInput" type="file" accept="image/*" on:change={handleAvatarSelect} style="display:none;" />
-                        <input type="button" class="btn btn-primary d-block mx-auto" value="Upload New..." on:click={() => document.getElementById('fileInput')?.click()} />
-                        {#if selectedAvatar}
-                            <small class="text-muted d-block mt-2">Selected: {selectedAvatar.name}</small>
-                        {/if}
-                    </div>
-                    {#if selectedAvatar || removeAvatar}
-                        <div class="mt-3">
-                            <button type="button" class="btn btn-success d-block mx-auto" on:click={handleUpdateAvatar} disabled={isUpdatingAvatar}>
+                    <div class="card-body text-center">
+                        <div class="position-relative d-inline-block mb-3">
+                            {#if avatarPreview}
+                                <img src="{avatarPreview}" alt="預覽" class="rounded-circle border border-primary" style="width: 120px; height: 120px; object-fit: cover;">
+                                <button type="button" class="btn btn-sm btn-outline-danger position-absolute top-0 end-0 rounded-circle" style="width: 30px; height: 30px; padding: 0;" on:click={() => { selectedAvatar = null; avatarPreview = null; removeAvatar = false; (document.getElementById('fileInput') as HTMLInputElement).value = ''; }} title="取消頭像選擇" aria-label="取消頭像選擇">
+                                    <i class="mdi mdi-close fs-6"></i>
+                                </button>
+                            {:else if currentUser?.avatar && currentUser.avatar !== '' && !removeAvatar}
+                                <img src="{pb.files.getURL(currentUser, currentUser.avatar)}" alt="頭像" class="rounded-circle" style="width: 120px; height: 120px; object-fit: cover;">
+                                <button type="button" class="btn btn-sm btn-outline-danger position-absolute top-0 end-0 rounded-circle" style="width: 30px; height: 30px; padding: 0;" on:click={() => { removeAvatar = true; selectedAvatar = null; avatarPreview = null; }} title="刪除頭像" aria-label="刪除頭像">
+                                    <i class="mdi mdi-delete fs-6"></i>
+                                </button>
+                            {:else}
+                                <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 120px; height: 120px;">
+                                    <i class="mdi mdi-account" style="font-size: 3rem; color: #6c757d;"></i>
+                                </div>
+                            {/if}
+                        </div>
+
+                        <div class="mb-3">
+                            <input id="fileInput" type="file" accept="image/*" on:change={handleAvatarSelect} class="d-none" />
+                            <button type="button" class="btn btn-primary" on:click={() => document.getElementById('fileInput')?.click()}>
+                                <i class="mdi mdi-upload"></i> 上傳新頭像
+                            </button>
+                            {#if selectedAvatar}
+                                <div class="small text-muted mt-2">已選擇: {selectedAvatar.name}</div>
+                            {/if}
+                        </div>
+
+                        {#if selectedAvatar || removeAvatar}
+                            <button type="button" class="btn btn-success w-100" on:click={handleUpdateAvatar} disabled={isUpdatingAvatar}>
                                 {#if isUpdatingAvatar}
                                     <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                                    Saving...
+                                    儲存中...
                                 {:else}
-                                    Save Avatar
+                                    儲存頭像
                                 {/if}
                             </button>
-                        </div>
-                    {/if}
+                        {/if}
+                    </div>
                 </div>
             </div>
         </div>
-        <Footer />
     </div>
 </div>
 

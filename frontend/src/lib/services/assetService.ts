@@ -4,13 +4,33 @@ import { logger } from '../utils/logger';
 // 資產相關操作
 export interface Asset {
   id: string;
+  asset_id: string;
   name: string;
-  description?: string;
-  category?: string;
-  status: 'available' | 'borrowed' | 'maintenance' | 'lost';
+  brand?: string;
+  model?: string;
+  serial_number?: string;
+  purchase_date?: string;
+  purchase_price?: number;
+  warranty_years?: number;
   location?: string;
-  serialNumber?: string;
-  purchaseDate?: string;
+  department?: string;
+  category?: {
+    id: string;
+    name: string;
+    prefix: string;
+  };
+  assigned_to?: {
+    id: string;
+    name?: string;
+    email: string;
+  };
+  images?: string[];
+  confidentiality_score?: number;
+  integrity_score?: number;
+  availability_score?: number;
+  total_risk_score?: number;
+  status: 'active' | 'inactive' | 'maintenance' | 'retired' | 'lost' | 'stolen' | 'borrowed';
+  notes?: string;
   created: string;
   updated: string;
 }
@@ -42,6 +62,7 @@ export async function getAssets(options?: {
   sort?: string;
   page?: number;
   perPage?: number;
+  expand?: string;
 }) {
   try {
     const records = await pb.collection('assets').getList(
@@ -50,6 +71,7 @@ export async function getAssets(options?: {
       {
         filter: options?.filter,
         sort: options?.sort,
+        expand: options?.expand || 'category,assigned_to'
       }
     );
     return records;
@@ -113,7 +135,7 @@ export async function searchAssets(query: string, options?: {
   perPage?: number;
 }) {
   try {
-    const filter = `name ~ "${query}" || description ~ "${query}" || serialNumber ~ "${query}"`;
+    const filter = `name ~ "${query}" || notes ~ "${query}" || serial_number ~ "${query}" || asset_id ~ "${query}"`;
     const records = await pb.collection('assets').getList(
       options?.page || 1,
       options?.perPage || 50,
@@ -139,7 +161,7 @@ export async function borrowAsset(assetId: string, expectedReturnDate?: string, 
 
     // 檢查資產狀態
     const asset = await getAsset(assetId);
-    if (asset.status !== 'available') {
+    if (asset.status !== 'active') {
       throw new Error('資產目前不可借用');
     }
 
@@ -184,7 +206,7 @@ export async function returnAsset(borrowRecordId: string, notes?: string) {
     });
 
     // 更新資產狀態
-    await updateAsset(borrowRecord.assetId, { status: 'available' });
+    await updateAsset(borrowRecord.assetId, { status: 'active' });
 
     logger.log('資產歸還成功:', updatedRecord);
     return updatedRecord as unknown as BorrowRecord;
@@ -271,7 +293,7 @@ export async function getCurrentBorrowedAssets() {
 export async function checkAssetAvailability(assetId: string) {
   try {
     const asset = await getAsset(assetId);
-    return asset.status === 'available';
+    return asset.status === 'active';
   } catch (error) {
     logger.error('檢查資產可用性失敗:', error);
     throw error;
