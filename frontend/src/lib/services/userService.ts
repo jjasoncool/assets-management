@@ -51,7 +51,7 @@ export function getCurrentUser() {
 }
 
 // 用戶 profile 相關
-export async function updateUserProfile(data: { name?: string; avatar?: File | string | null }) {
+export async function updateUserProfile(data: { name?: string; department?: string; avatar?: File | string | null }) {
   try {
     const user = pb.authStore.model;
     if (!user) throw new Error('未登入');
@@ -60,6 +60,10 @@ export async function updateUserProfile(data: { name?: string; avatar?: File | s
 
     if (data.name !== undefined) {
       formData.append('name', data.name);
+    }
+
+    if (data.department !== undefined) {
+      formData.append('department', data.department);
     }
 
     if (data.avatar !== undefined) {

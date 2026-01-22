@@ -1,6 +1,6 @@
 <script lang="ts">
 import { goto } from '$app/navigation';
-import { onMount } from 'svelte';
+import { onMount, tick } from 'svelte';
 import { logout, getCurrentUser, updateUserProfile, changePassword } from '$lib/services/userService';
 import { pb } from '$lib/pocketbase';
 import Navbar from '$lib/components/Navbar.svelte';
@@ -22,8 +22,7 @@ function handleLogout() {
 
 let name = '';
 let email = '';
-let phone = '';
-let bio = '';
+let department = '';
 
 // Profile 更新相關
 let isUpdatingProfile = false;
@@ -46,8 +45,7 @@ onMount(() => {
   if (currentUser) {
     name = currentUser.name || '';
     email = currentUser.email || '';
-    phone = currentUser.phone || '';
-    bio = currentUser.bio || '';
+    department = currentUser.department || '';
   }
 
   // 設置 modal 事件處理
@@ -64,10 +62,14 @@ async function handleUpdateProfile() {
   isUpdatingProfile = true;
 
   try {
-    const updateData: { name?: string; avatar?: File | string } = {};
+    const updateData: { name?: string; department?: string; avatar?: File | string } = {};
 
     if (name !== (currentUser.name || '')) {
       updateData.name = name;
+    }
+
+    if (department !== (currentUser.department || '')) {
+      updateData.department = department;
     }
 
     if (Object.keys(updateData).length === 0) {
@@ -155,56 +157,57 @@ async function handleUpdateAvatar() {
   }
 }
 
-// 處理頭像文件選擇
-function handleAvatarSelect(event: Event) {
-  const target = event.target as HTMLInputElement;
-  const file = target.files?.[0];
+  // 處理頭像文件選擇
+  function handleAvatarSelect(event: Event) {
+    const target = event.target as HTMLInputElement;
+    const file = target.files?.[0];
 
-  if (!file) {
-    selectedAvatar = null;
-    avatarPreview = null;
-    return;
+    if (!file) {
+      selectedAvatar = null;
+      avatarPreview = null;
+      return;
+    }
+
+    // 驗證文件類型
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/svg+xml', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      if (SwalInstance) SwalInstance.fire({
+        icon: 'error',
+        title: '無效的文件類型',
+        text: '只允許上傳 JPEG, PNG, SVG, GIF 或 WebP 格式的圖片'
+      });
+      // 清空輸入
+      target.value = '';
+      selectedAvatar = null;
+      avatarPreview = null;
+      return;
+    }
+
+    // 驗證文件大小 (5MB 限制)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      if (SwalInstance) SwalInstance.fire({
+        icon: 'error',
+        title: '文件過大',
+        text: '圖片大小不能超過 5MB'
+      });
+      // 清空輸入
+      target.value = '';
+      selectedAvatar = null;
+      avatarPreview = null;
+      return;
+    }
+
+    // 設置選擇的檔案
+    selectedAvatar = file;
+
+    // 生成預覽
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      avatarPreview = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
   }
-
-  // 驗證文件類型
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/svg+xml', 'image/gif', 'image/webp'];
-  if (!allowedTypes.includes(file.type)) {
-    if (SwalInstance) SwalInstance.fire({
-      icon: 'error',
-      title: '無效的文件類型',
-      text: '只允許上傳 JPEG, PNG, SVG, GIF 或 WebP 格式的圖片'
-    });
-    // 清空輸入
-    target.value = '';
-    selectedAvatar = null;
-    avatarPreview = null;
-    return;
-  }
-
-  // 驗證文件大小 (5MB 限制)
-  const maxSize = 5 * 1024 * 1024; // 5MB
-  if (file.size > maxSize) {
-    if (SwalInstance) SwalInstance.fire({
-      icon: 'error',
-      title: '文件過大',
-      text: '圖片大小不能超過 5MB'
-    });
-    // 清空輸入
-    target.value = '';
-    selectedAvatar = null;
-    avatarPreview = null;
-    return;
-  }
-
-  selectedAvatar = file;
-
-  // 生成預覽
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    avatarPreview = e.target?.result as string;
-  };
-  reader.readAsDataURL(file);
-}
 
 // 更改密碼
 async function handleChangePassword() {
@@ -275,13 +278,19 @@ async function handleChangePassword() {
   }
 }
 
-// 清空密碼表單
-function clearPasswordForm() {
-  oldPassword = '';
-  newPassword = '';
-  confirmPassword = '';
-}
+  // 清空密碼表單
+  function clearPasswordForm() {
+    oldPassword = '';
+    newPassword = '';
+    confirmPassword = '';
+  }
 </script>
+
+<style>
+.position-relative .btn:hover {
+  filter: brightness(1.1);
+}
+</style>
 
 <div class="min-vh-100 pb-5">
     <div class="container-fluid px-4">
@@ -305,6 +314,10 @@ function clearPasswordForm() {
                                 <div class="mb-3">
                                     <strong class="text-muted">信箱:</strong>
                                     <div>{currentUser?.email || '未設定'}</div>
+                                </div>
+                                <div class="mb-3">
+                                    <strong class="text-muted">部門:</strong>
+                                    <div>{currentUser?.department || '未設定'}</div>
                                 </div>
                                 <div class="mb-3">
                                     <strong class="text-muted">建立時間:</strong>
@@ -333,6 +346,10 @@ function clearPasswordForm() {
                                     <div class="mb-3">
                                         <label for="email" class="form-label">信箱 (唯讀)</label>
                                         <input bind:value={email} placeholder="輸入您的信箱" id="email" name="email" type="email" class="form-control" readonly>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="department" class="form-label">部門</label>
+                                        <input bind:value={department} placeholder="輸入您的部門" id="department" name="department" type="text" class="form-control">
                                     </div>
                                     <div class="d-flex gap-2">
                                         <button type="submit" class="btn btn-primary flex-fill" disabled={isUpdatingProfile}>
@@ -364,13 +381,13 @@ function clearPasswordForm() {
                         <div class="position-relative d-inline-block mb-3">
                             {#if avatarPreview}
                                 <img src="{avatarPreview}" alt="預覽" class="rounded-circle border border-primary" style="width: 120px; height: 120px; object-fit: cover;">
-                                <button type="button" class="btn btn-sm btn-outline-danger position-absolute top-0 end-0 rounded-circle" style="width: 30px; height: 30px; padding: 0;" on:click={() => { selectedAvatar = null; avatarPreview = null; removeAvatar = false; (document.getElementById('fileInput') as HTMLInputElement).value = ''; }} title="取消頭像選擇" aria-label="取消頭像選擇">
-                                    <i class="mdi mdi-close fs-6"></i>
+                                <button type="button" class="btn btn-sm position-absolute top-0 end-0 rounded-circle bg-danger" style="width: 30px; height: 30px; padding: 0;" on:click={() => { selectedAvatar = null; avatarPreview = null; removeAvatar = false; (document.getElementById('fileInput') as HTMLInputElement).value = ''; }} title="取消頭像選擇" aria-label="取消頭像選擇">
+                                    <i class="mdi mdi-delete fs-6 text-white"></i>
                                 </button>
                             {:else if currentUser?.avatar && currentUser.avatar !== '' && !removeAvatar}
                                 <img src="{pb.files.getURL(currentUser, currentUser.avatar)}" alt="頭像" class="rounded-circle" style="width: 120px; height: 120px; object-fit: cover;">
-                                <button type="button" class="btn btn-sm btn-outline-danger position-absolute top-0 end-0 rounded-circle" style="width: 30px; height: 30px; padding: 0;" on:click={() => { removeAvatar = true; selectedAvatar = null; avatarPreview = null; }} title="刪除頭像" aria-label="刪除頭像">
-                                    <i class="mdi mdi-delete fs-6"></i>
+                                <button type="button" class="btn btn-sm position-absolute top-0 end-0 rounded-circle bg-danger" style="width: 30px; height: 30px; padding: 0; transition: background-color 0.2s;" on:mouseenter={() => {}} on:mouseleave={() => {}} on:click={() => { removeAvatar = true; selectedAvatar = null; avatarPreview = null; }} title="刪除頭像" aria-label="刪除頭像">
+                                    <i class="mdi mdi-delete fs-6 text-white"></i>
                                 </button>
                             {:else}
                                 <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 120px; height: 120px;">
