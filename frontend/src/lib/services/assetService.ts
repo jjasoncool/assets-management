@@ -1,6 +1,17 @@
 import { pb } from '../pocketbase';
 import { logger } from '../utils/logger';
 
+// 資產類別相關操作
+export interface AssetCategory {
+  id: string;
+  name: string;
+  prefix: string;
+  description?: string;
+  next_sequence: number;
+  created: string;
+  updated: string;
+}
+
 // 資產相關操作
 export interface Asset {
   id: string;
@@ -296,6 +307,134 @@ export async function checkAssetAvailability(assetId: string) {
     return asset.status === 'active';
   } catch (error) {
     logger.error('檢查資產可用性失敗:', error);
+    throw error;
+  }
+}
+
+// ============ 資產類別功能 ============
+
+// 獲取所有資產類別
+export async function getAssetCategories(options?: {
+  filter?: string;
+  sort?: string;
+  page?: number;
+  perPage?: number;
+}) {
+  try {
+    const records = await pb.collection('asset_categories').getList(
+      options?.page || 1,
+      options?.perPage || 50,
+      {
+        filter: options?.filter,
+        sort: options?.sort || 'name'
+      }
+    );
+    return records;
+  } catch (error) {
+    logger.error('獲取資產類別列表失敗:', error);
+    throw error;
+  }
+}
+
+// 獲取單個資產類別
+export async function getAssetCategory(id: string) {
+  try {
+    const record = await pb.collection('asset_categories').getOne(id);
+    return record as unknown as AssetCategory;
+  } catch (error) {
+    logger.error('獲取資產類別失敗:', error);
+    throw error;
+  }
+}
+
+// 創建資產類別
+export async function createAssetCategory(data: Omit<AssetCategory, 'id' | 'created' | 'updated'>) {
+  try {
+    const user = pb.authStore.model;
+    if (!user) throw new Error('未登入');
+
+    // 檢查用戶是否具有 admin 角色
+    const userRoles = user.role || [];
+    if (!Array.isArray(userRoles) || !userRoles.includes('admin')) {
+      throw new Error('需要管理員權限才能創建資產類別');
+    }
+
+    // 驗證數據
+    if (!data.name || typeof data.name !== 'string') {
+      throw new Error('類別名稱是必要的，並且必須是字串');
+    }
+
+    if (!data.prefix || typeof data.prefix !== 'string' || data.prefix.length !== 2) {
+      throw new Error('類別前綴是必要的，必須是 2 個字元的字串');
+    }
+
+    if (typeof data.next_sequence !== 'number' || data.next_sequence < 1) {
+      throw new Error('next_sequence 是必要的，必須是大於或等於 1 的數字');
+    }
+
+    // 準備數據
+    const submitData = {
+      name: data.name.trim(),
+      prefix: data.prefix.trim().toUpperCase(),
+      next_sequence: data.next_sequence,
+      description: data.description ? data.description.trim() : ''
+    };
+
+    const record = await pb.collection('asset_categories').create(submitData);
+    logger.log('資產類別創建成功:', record);
+    return record as unknown as AssetCategory;
+  } catch (error) {
+    logger.error('創建資產類別失敗:', error);
+
+    // 提供更詳細的錯誤信息
+    if (error instanceof Error) {
+      if (error.message.includes('Failed to create record')) {
+        const cause = error.cause as any;
+        throw new Error('創建資產類別失敗：' + (cause?.message || '數據驗證失敗'));
+      }
+    }
+
+    throw error;
+  }
+}
+
+// 更新資產類別
+export async function updateAssetCategory(id: string, data: Partial<Omit<AssetCategory, 'id' | 'created' | 'updated'>>) {
+  try {
+    const user = pb.authStore.model;
+    if (!user) throw new Error('未登入');
+
+    // 檢查用戶是否具有 admin 角色
+    const userRoles = user.role || [];
+    if (!Array.isArray(userRoles) || !userRoles.includes('admin')) {
+      throw new Error('需要管理員權限才能更新資產類別');
+    }
+
+    const record = await pb.collection('asset_categories').update(id, data);
+    logger.log('資產類別更新成功:', record);
+    return record as unknown as AssetCategory;
+  } catch (error) {
+    logger.error('更新資產類別失敗:', error);
+    throw error;
+  }
+}
+
+// 刪除資產類別
+export async function deleteAssetCategory(id: string) {
+  try {
+    const user = pb.authStore.model;
+    if (!user) throw new Error('未登入');
+
+    // 檢查用戶是否具有 admin 角色
+    const userRoles = user.role || [];
+    if (!Array.isArray(userRoles) || !userRoles.includes('admin')) {
+      throw new Error('需要管理員權限才能刪除資產類別');
+    }
+
+    await pb.collection('asset_categories').delete(id);
+    logger.log('資產類別刪除成功:', id);
+  } catch (error) {
+    logger.error('刪除資產類別失敗:', error);
     throw error;
   }
 }

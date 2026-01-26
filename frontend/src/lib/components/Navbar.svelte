@@ -25,10 +25,12 @@ export let currentUser: any;
                     <a class="nav-link dropdown-toggle" href="#" id="assetsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="mdi mdi-package-variant-closed me-1"></i>資產管理
                     </a>
-                    <ul class="dropdown-menu" aria-labelledby="assetsDropdown">
-                        <li><a class="dropdown-item" href="/assets"><i class="mdi mdi-format-list-bulleted me-2"></i>資產清單</a></li>
-                        <li><a class="dropdown-item" href="/assets/add"><i class="mdi mdi-plus me-2"></i>新增資產</a></li>
-                    </ul>
+                        <ul class="dropdown-menu" aria-labelledby="assetsDropdown">
+                            <li><a class="dropdown-item" href="/assets"><i class="mdi mdi-format-list-bulleted me-2"></i>資產清單</a></li>
+                            {#if currentUser?.role?.includes('admin')}
+                            <li><a class="dropdown-item" href="/asset-categories"><i class="mdi mdi-shape me-2"></i>資產類別管理</a></li>
+                            {/if}
+                        </ul>
                 </li>
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" id="borrowDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
