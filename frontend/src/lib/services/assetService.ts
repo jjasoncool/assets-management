@@ -438,3 +438,102 @@ export async function deleteAssetCategory(id: string) {
     throw error;
   }
 }
+
+// 生成 asset_id
+export async function generateAssetId(categoryId: string, categories: any[]): Promise<string> {
+  try {
+    // 獲取選定的資產類別
+    const category = categories.find(cat => cat.id === categoryId);
+    if (!category) {
+      throw new Error('未找到選定的資產類別');
+    }
+
+    // 獲取當前類別的所有資產
+    const existingAssets = await pb.collection('assets').getList(1, 1000, {
+      filter: `category = "${categoryId}"`,
+      sort: 'asset_id'
+    });
+
+    // 找出已經使用的序號
+    const usedNumbers = new Set<number>();
+    existingAssets.items.forEach(asset => {
+      const match = asset.asset_id.match(/^([A-Z]{2})-(\d{3})$/);
+      if (match) {
+        const num = parseInt(match[2], 10);
+        usedNumbers.add(num);
+      }
+    });
+
+    // 將已使用的序號轉換為陣列並排序
+    const sortedUsedNumbers = Array.from(usedNumbers).sort((a, b) => a - b);
+
+    // 找出最小的可用序號
+    let nextNumber = 1;
+    for (const num of sortedUsedNumbers) {
+      if (num === nextNumber) {
+        nextNumber++;
+      } else if (num > nextNumber) {
+        break;
+      }
+    }
+
+    // 生成 asset_id
+    const assetId = `${category.prefix}-${nextNumber.toString().padStart(3, '0')}`;
+
+    return assetId;
+  } catch (error) {
+    logger.error('生成 asset_id 失敗:', error);
+    throw error;
+  }
+}
+
+// 生成 asset_id 並更新 next_sequence（原子操作）
+export async function generateAssetIdAndUpdateSequence(categoryId: string, categories: any[]): Promise<{ assetId: string, newSequence: number }> {
+  try {
+    // 獲取選定的資產類別
+    const category = categories.find(cat => cat.id === categoryId);
+    if (!category) {
+      throw new Error('未找到選定的資產類別');
+    }
+
+    // 獲取當前類別的所有資產
+    const existingAssets = await pb.collection('assets').getList(1, 1000, {
+      filter: `category = "${categoryId}"`,
+      sort: 'asset_id'
+    });
+
+    // 找出已經使用的序號
+    const usedNumbers = new Set<number>();
+    existingAssets.items.forEach(asset => {
+      const match = asset.asset_id.match(/^([A-Z]{2})-(\d{3})$/);
+      if (match) {
+        const num = parseInt(match[2], 10);
+        usedNumbers.add(num);
+      }
+    });
+
+    // 將已使用的序號轉換為陣列並排序
+    const sortedUsedNumbers = Array.from(usedNumbers).sort((a, b) => a - b);
+
+    // 找出最小的可用序號
+    let nextNumber = 1;
+    for (const num of sortedUsedNumbers) {
+      if (num === nextNumber) {
+        nextNumber++;
+      } else if (num > nextNumber) {
+        break;
+      }
+    }
+
+    // 生成 asset_id
+    const assetId = `${category.prefix}-${nextNumber.toString().padStart(3, '0')}`;
+
+    // 計算新的序號（確保大於當前 next_sequence）
+    const newSequence = Math.max(category.next_sequence, nextNumber) + 1;
+
+    return { assetId, newSequence };
+  } catch (error) {
+    logger.error('生成 asset_id 並更新序號失敗:', error);
+    throw error;
+  }
+}

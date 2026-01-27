@@ -14,15 +14,18 @@
     export let data: any;
     let currentUser = data?.currentUser;
 
-    // 表單狀態
-    let loading = false;
-    let error: string | null = null;
-    let success: string | null = null;
+// 表單狀態
+let loading = true; // 初始設定為 true，避免閃爍效果
+let error: string | null = null;
+let success: string | null = null;
 
-    // 資產類別數據
-    let categories: any[] = [];
-    let isEditing = false;
-    let currentCategoryId = '';
+// 編輯突顯狀態
+let isEditingHighlighted = false;
+
+// 資產類別數據
+let categories: any[] = [];
+let isEditing = false;
+let currentCategoryId = '';
 
     // 表單數據
     let formData = {
@@ -37,20 +40,20 @@
         await loadCategories();
     });
 
-    // 載入資產類別列表
-    async function loadCategories() {
-        try {
-            loading = true;
-            error = null;
+// 載入資產類別列表
+async function loadCategories() {
+    try {
+        loading = true;
+        error = null;
 
-            const result = await getAssetCategories({ sort: 'name' });
-            categories = result.items;
-        } catch (err) {
-            error = err instanceof Error ? err.message : '載入資產類別失敗';
-        } finally {
-            loading = false;
-        }
+        const result = await getAssetCategories({ sort: 'name' });
+        categories = result.items;
+    } catch (err) {
+        error = err instanceof Error ? err.message : '載入資產類別失敗';
+    } finally {
+        loading = false;
     }
+}
 
     // 新增資產類別
     async function handleSubmit() {
@@ -75,13 +78,17 @@
                 return;
             }
 
-            // 準備表單數據 - 使用 JSON 對象（與官方文檔一致）
-            const submitData = {
-                name: formData.name.trim(),
-                prefix: formData.prefix.trim().toUpperCase(),
-                next_sequence: formData.next_sequence,
-                description: formData.description.trim()
-            };
+// 準備表單數據 - 使用 JSON 對象（與官方文檔一致）
+const submitData: any = {
+    name: formData.name.trim(),
+    prefix: formData.prefix.trim().toUpperCase(),
+    description: formData.description.trim()
+};
+
+// 只有在新增時才包含 next_sequence，編輯時不更新 next_sequence
+if (!isEditing) {
+    submitData.next_sequence = formData.next_sequence;
+}
 
             if (isEditing) {
                 // 編輯現有類別
@@ -105,29 +112,39 @@
         }
     }
 
-    // 重置表單
-    function resetForm() {
-        formData = {
-            name: '',
-            prefix: '',
-            next_sequence: 1,
-            description: ''
-        };
-        isEditing = false;
-        currentCategoryId = '';
-    }
+// 重置表單
+function resetForm() {
+    formData = {
+        name: '',
+        prefix: '',
+        next_sequence: 1,
+        description: ''
+    };
+    isEditing = false;
+    isEditingHighlighted = false;
+    currentCategoryId = '';
+}
 
-    // 編輯類別
-    function editCategory(category: any) {
-        isEditing = true;
-        currentCategoryId = category.id;
-        formData = {
-            name: category.name,
-            prefix: category.prefix,
-            next_sequence: category.next_sequence || 1,
-            description: category.description || ''
-        };
-    }
+// 編輯類別
+function editCategory(category: any) {
+    isEditing = true;
+    isEditingHighlighted = true;
+    currentCategoryId = category.id;
+    formData = {
+        name: category.name,
+        prefix: category.prefix,
+        next_sequence: category.next_sequence || 1,
+        description: category.description || ''
+    };
+
+    // 滾動到表單區域
+    setTimeout(() => {
+        const formCard = document.querySelector('.card.mb-4');
+        if (formCard) {
+            formCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, 100);
+}
 
     // 刪除類別
     async function deleteCategory(categoryId: string) {
@@ -185,7 +202,7 @@
                 {/if}
 
                 <!-- 表單區域 -->
-                <div class="card mb-4">
+                <div class="card mb-4 {isEditingHighlighted ? 'bg-warning-subtle border border-warning' : ''}">
                     <div class="card-header bg-light">
                         <h6 class="mb-0 fw-bold">{isEditing ? '編輯資產類別' : '新增資產類別'}</h6>
                     </div>
@@ -231,14 +248,14 @@
                                 <div class="col-12">
                                     <div class="d-flex justify-content-end">
                                         {#if isEditing}
-                                            <button
-                                                type="button"
-                                                class="btn btn-outline-secondary me-2"
-                                                on:click={resetForm}
-                                            >
-                                                <i class="mdi mdi-cancel me-2"></i>
-                                                取消
-                                            </button>
+                                        <button
+                                            type="button"
+                                            class="btn btn-outline-secondary me-2"
+                                            on:click={resetForm}
+                                        >
+                                            <i class="mdi mdi-cancel me-2" aria-hidden="true"></i>
+                                            取消
+                                        </button>
                                         {/if}
                                         <button
                                             type="submit"
@@ -246,14 +263,14 @@
                                             disabled={loading}
                                         >
                                             {#if loading}
-                                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
                                                 處理中...
                                             {:else}
                                                 {#if isEditing}
-                                                    <i class="mdi mdi-content-save me-2"></i>
+                                                    <i class="mdi mdi-content-save me-2" aria-hidden="true"></i>
                                                     更新類別
                                                 {:else}
-                                                    <i class="mdi mdi-plus me-2"></i>
+                                                    <i class="mdi mdi-plus me-2" aria-hidden="true"></i>
                                                     新增類別
                                                 {/if}
                                             {/if}
@@ -272,55 +289,59 @@
                         <span class="badge bg-primary">{categories.length} 個類別</span>
                     </div>
                     <div class="card-body">
-                        {#if loading && categories.length === 0}
-                            <div class="text-center py-4">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden">載入中...</span>
-                                </div>
-                                <p class="mt-2">載入資產類別中...</p>
+                    {#if loading}
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">載入中...</span>
                             </div>
-                        {:else if categories.length === 0}
-                            <div class="alert alert-info mb-0">
-                                <i class="mdi mdi-information me-2"></i>
-                                目前沒有資產類別，請新增一個。
-                            </div>
-                        {:else}
+                            <p class="mt-2">載入資產類別中...</p>
+                        </div>
+                    {:else if categories.length === 0}
+                        <div class="alert alert-info mb-0">
+                            <i class="mdi mdi-information me-2"></i>
+                            目前沒有資產類別，請新增一個。
+                        </div>
+                    {:else}
                             <div class="table-responsive">
                                 <table class="table table-hover">
                                     <thead class="table-light">
                                         <tr>
                                             <th>類別名稱</th>
-                                            <th>前綴</th>
+                                            <th style="width: 80px;">前綴</th>
+                                            <th class="text-center" style="width: 150px;">下一個序號</th>
                                             <th>描述</th>
-                                            <th>操作</th>
+                                            <th class="w-auto">操作</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {#each categories as category}
                                             <tr>
                                                 <td class="align-middle">{category.name}</td>
-                                                <td class="align-middle text-center">
+                                                <td class="align-middle">
                                                     <span class="badge bg-secondary">{category.prefix}</span>
                                                 </td>
+                                                <td class="align-middle text-center">{category.next_sequence}</td>
                                                 <td class="align-middle">{category.description || '-'}</td>
-                                                <td class="align-middle">
-                                                    <div class="d-flex gap-2">
-                                                        <button
-                                                            type="button"
-                                                            class="btn btn-sm btn-outline-primary"
-                                                            on:click={() => editCategory(category)}
-                                                        >
-                                                            <i class="mdi mdi-pencil me-1"></i>
-                                                            編輯
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            class="btn btn-sm btn-outline-danger"
-                                                            on:click={() => deleteCategory(category.id)}
-                                                        >
-                                                            <i class="mdi mdi-delete me-1"></i>
-                                                            刪除
-                                                        </button>
+                                                <td class="align-middle w-auto">
+                                                    <div class="d-flex gap-2 justify-content-end">
+                                                    <button
+                                                        type="button"
+                                                        class="btn btn-sm btn-outline-primary"
+                                                        on:click={() => editCategory(category)}
+                                                        aria-label={"編輯類別 " + category.name}
+                                                    >
+                                                        <i class="mdi mdi-pencil me-1" aria-hidden="true"></i>
+                                                        編輯
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        class="btn btn-sm btn-outline-danger"
+                                                        on:click={() => deleteCategory(category.id)}
+                                                        aria-label={"刪除類別 " + category.name}
+                                                    >
+                                                        <i class="mdi mdi-delete me-1" aria-hidden="true"></i>
+                                                        刪除
+                                                    </button>
                                                     </div>
                                                 </td>
                                             </tr>

@@ -3,8 +3,9 @@
     import { goto } from '$app/navigation';
     import { logout } from '$lib/services/userService';
     import Navbar from '$lib/components/Navbar.svelte';
-    import { createAsset, getAssets } from '$lib/services/assetService';
+    import { createAsset, getAssets, generateAssetId, generateAssetIdAndUpdateSequence } from '$lib/services/assetService';
     import { pb } from '$lib/pocketbase';
+    import { Swal } from '$lib/stores';
 
     // 由 layout 提供的使用者資料
     export let data: any;
@@ -111,12 +112,46 @@
         imagePreviews = imagePreviews.filter((_, i) => i !== index);
     }
 
-    // 計算風險分數
-    function calculateRiskScore() {
+    // 响應式風險分數計算
+    $: totalRiskScore = () => {
         const c = formData.confidentiality_score || 0;
         const i = formData.integrity_score || 0;
         const a = formData.availability_score || 0;
-        return Math.round((c + i + a) / 3 * 100) / 100;
+        return Math.round(c + i + a);
+    };
+
+    // 响應式進度條寬度計算
+    $: progressWidth = () => {
+        const score = totalRiskScore();
+        return Math.round((score / 21) * 100);
+    };
+
+    // 响應式進度條顏色計算
+    $: progressBarClass = () => {
+        const score = totalRiskScore();
+        if (score <= 7) {
+            return 'bg-primary'; // 藍色
+        } else if (score <= 14) {
+            return 'bg-warning'; // 黃色
+        } else {
+            return 'bg-danger'; // 紅色
+        }
+    };
+
+    // 處理分數輸入，確保只能輸入 0-7 的數字
+    function handleScoreInput(event: Event, field: 'confidentiality_score' | 'integrity_score' | 'availability_score') {
+        const input = event.target as HTMLInputElement;
+        let value = parseInt(input.value) || 0;
+
+        // 限制範圍在 0-7 之間
+        if (value < 0) value = 0;
+        if (value > 7) value = 7;
+
+        // 更新 formData
+        formData[field] = value;
+
+        // 更新 input 值
+        input.value = value.toString();
     }
 
     // 驗證表單
@@ -139,16 +174,16 @@
             errors.push('保固年數不能為負數');
         }
 
-        if (formData.confidentiality_score !== undefined && (formData.confidentiality_score < 0 || formData.confidentiality_score > 5)) {
-            errors.push('機密性分數必須在 0-5 之間');
+        if (formData.confidentiality_score !== undefined && (formData.confidentiality_score < 0 || formData.confidentiality_score > 7)) {
+            errors.push('機密性分數必須在 0-7 之間');
         }
 
-        if (formData.integrity_score !== undefined && (formData.integrity_score < 0 || formData.integrity_score > 5)) {
-            errors.push('完整性分數必須在 0-5 之間');
+        if (formData.integrity_score !== undefined && (formData.integrity_score < 0 || formData.integrity_score > 7)) {
+            errors.push('完整性分數必須在 0-7 之間');
         }
 
-        if (formData.availability_score !== undefined && (formData.availability_score < 0 || formData.availability_score > 5)) {
-            errors.push('可用性分數必須在 0-5 之間');
+        if (formData.availability_score !== undefined && (formData.availability_score < 0 || formData.availability_score > 7)) {
+            errors.push('可用性分數必須在 0-7 之間');
         }
 
         if (imageFiles.length > 10) {
@@ -171,8 +206,22 @@
                 return;
             }
 
+    // 生成 asset_id 並準備更新序號（處理並發）
+    let assetId = '';
+    let newSequence = 0;
+    let retries = 3; // 重試次數
+    let operationSuccess = false;
+
+    while (retries > 0 && !operationSuccess) {
+        try {
+            // 生成 asset_id 和新序號
+            const { assetId: generatedId, newSequence: generatedSequence } = await generateAssetIdAndUpdateSequence(formData.category, categories);
+            assetId = generatedId;
+            newSequence = generatedSequence;
+
             // 準備表單數據
             const submitData: any = {
+                asset_id: assetId,
                 name: formData.name.trim(),
                 brand: formData.brand.trim(),
                 model: formData.model.trim(),
@@ -187,7 +236,7 @@
                 confidentiality_score: formData.confidentiality_score,
                 integrity_score: formData.integrity_score,
                 availability_score: formData.availability_score,
-                total_risk_score: calculateRiskScore(),
+                total_risk_score: totalRiskScore(),
                 status: formData.status,
                 notes: formData.notes.trim()
             };
@@ -210,7 +259,24 @@
                 result = await createAsset(submitData);
             }
 
-            success = '資產新增成功！';
+            // 更新類別的 next_sequence 字段
+            if (formData.category) {
+                await pb.collection('asset_categories').update(formData.category, {
+                    next_sequence: newSequence
+                });
+            }
+
+            operationSuccess = true;
+        } catch (error) {
+            retries--;
+            if (retries === 0) {
+                throw error;
+            }
+            // 如果發生錯誤，等待一會兒再重試
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    }
+
             // 重置表單
             formData = {
                 name: '',
@@ -233,10 +299,16 @@
             imageFiles = [];
             imagePreviews = [];
 
-            // 3 秒後跳轉到資產列表
-            setTimeout(() => {
-                goto('/assets');
-            }, 3000);
+            // 使用 SweetAlert 顯示成功訊息
+            $Swal.fire({
+                title: '成功！',
+                text: '資產新增成功！',
+                icon: 'success',
+                confirmButtonText: '確定'
+            });
+
+            // 跳轉到資產列表
+            goto('/assets');
 
         } catch (err) {
             error = err instanceof Error ? err.message : '新增資產失敗';
@@ -431,53 +503,62 @@
 
                     <!-- 風險評估 -->
                     <div class="row g-3 mb-4">
+                        <div class="col-md-12 mb-2">
+                            <div class="alert alert-info small p-2 mb-0">
+                                <i class="mdi mdi-information-outline me-1"></i>
+                                分數說明：0 不適用 | 1 普通 | 3 內部使用 | 5-7 機密
+                            </div>
+                        </div>
                         <div class="col-md-4">
-                            <label for="confidentiality_score" class="form-label small fw-bold text-secondary">機密性分數 (0-5)</label>
+                            <label for="confidentiality_score" class="form-label small fw-bold text-secondary">機密性分數 (0-7)</label>
                             <input
                                 type="number"
                                 id="confidentiality_score"
                                 class="form-control shadow-none"
                                 bind:value={formData.confidentiality_score}
-                                placeholder="0-5"
+                                placeholder="0-7"
                                 min="0"
-                                max="5"
-                                step="0.1"
+                                max="7"
+                                step="1"
+                                on:input={(e) => handleScoreInput(e, 'confidentiality_score')}
                             />
                         </div>
                         <div class="col-md-4">
-                            <label for="integrity_score" class="form-label small fw-bold text-secondary">完整性分數 (0-5)</label>
+                            <label for="integrity_score" class="form-label small fw-bold text-secondary">完整性分數 (0-7)</label>
                             <input
                                 type="number"
                                 id="integrity_score"
                                 class="form-control shadow-none"
                                 bind:value={formData.integrity_score}
-                                placeholder="0-5"
+                                placeholder="0-7"
                                 min="0"
-                                max="5"
-                                step="0.1"
+                                max="7"
+                                step="1"
+                                on:input={(e) => handleScoreInput(e, 'integrity_score')}
                             />
                         </div>
                         <div class="col-md-4">
-                            <label for="availability_score" class="form-label small fw-bold text-secondary">可用性分數 (0-5)</label>
+                            <label for="availability_score" class="form-label small fw-bold text-secondary">可用性分數 (0-7)</label>
                             <input
                                 type="number"
                                 id="availability_score"
                                 class="form-control shadow-none"
                                 bind:value={formData.availability_score}
-                                placeholder="0-5"
+                                placeholder="0-7"
                                 min="0"
-                                max="5"
-                                step="0.1"
+                                max="7"
+                                step="1"
+                                on:input={(e) => handleScoreInput(e, 'availability_score')}
                             />
                         </div>
                         <div class="col-md-12">
                             <div class="alert alert-light small">
-                                風險總分：{calculateRiskScore()} / 5.0
+                                風險總分：{totalRiskScore()} / 21
                                 <div class="progress mt-2" style="height: 8px">
                                     <div
-                                        class="progress-bar"
-                                        style="width: {Math.round(calculateRiskScore() / 5 * 100)}%"
-                                    ></div>
+                                        class="progress-bar {progressBarClass()}"
+                                        style="width: {progressWidth()}%"
+                                    />
                                 </div>
                             </div>
                         </div>
