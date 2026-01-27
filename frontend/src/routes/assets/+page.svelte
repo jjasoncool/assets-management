@@ -211,7 +211,7 @@
                             <tr><td colspan="10" class="text-center py-5 text-muted">找不到任何資產</td></tr>
                         {:else}
                             {#each assets as asset}
-                                <tr class="cursor-pointer" on:click={() => goto(`/assets/${asset.id}`)}>
+                                <tr class="cursor-pointer" on:click={() => goto(`/assets/${asset.id}/edit`)}>
                                     <td on:click|stopPropagation>
                                         <input
                                             type="checkbox"
