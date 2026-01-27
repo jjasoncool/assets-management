@@ -50,18 +50,29 @@
                     filter: filter,
                     page: page,
                     perPage: perPage,
-                    sort: '-updated'
+                    sort: '-updated',
+                    expand: 'category,assigned_to'
                 });
             } else {
                 result = await getAssets({
                     filter: filter,
                     page: page,
                     perPage: perPage,
-                    sort: '-updated'
+                    sort: '-updated',
+                    expand: 'category,assigned_to'
                 });
             }
 
-            assets = result.items as unknown as Asset[];
+            // PocketBase 將關聯資料放在 'expand' 屬性中。
+            // 這裡我們將 expand 內的資料映射回主物件，以符合 Asset 介面定義並讓表格正確顯示。
+            assets = result.items.map((record: any) => ({
+                ...record,
+                // 如果有 expand.category，就用它覆蓋原本只是 ID 的 category 欄位
+                category: record.expand?.category,
+                // 同理，處理 assigned_to 讓負責人也能正確顯示
+                assigned_to: record.expand?.assigned_to
+            })) as unknown as Asset[];
+
             totalItems = result.totalItems;
             totalPages = result.totalPages;
             currentPage = result.page;
@@ -219,7 +230,7 @@
                                         </span>
                                     </td>
                                     <td>{asset.location || '-'}</td>
-                                    <td>{asset.assigned_to?.email || '未指派'}</td>
+                                    <td>{asset.assigned_to?.name || asset.assigned_to?.email || '未指派'}</td>
                                     <td class="text-muted small">{new Date(asset.updated).toLocaleDateString('zh-TW')}</td>
                                     <td class="text-end px-4">
                                         <button class="btn btn-link text-danger p-0 shadow-none" title="刪除資產" aria-label="刪除資產">

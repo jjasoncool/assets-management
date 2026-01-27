@@ -144,6 +144,7 @@ export async function searchAssets(query: string, options?: {
   sort?: string;
   page?: number;
   perPage?: number;
+  expand?: string;
 }) {
   try {
     const filter = `name ~ "${query}" || notes ~ "${query}" || serial_number ~ "${query}" || asset_id ~ "${query}"`;
@@ -153,6 +154,7 @@ export async function searchAssets(query: string, options?: {
       {
         filter: options?.filter ? `${filter} && ${options.filter}` : filter,
         sort: options?.sort,
+        expand: options?.expand || 'category,assigned_to'
       }
     );
     return records;
