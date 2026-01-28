@@ -441,47 +441,61 @@ export async function deleteAssetCategory(id: string) {
   }
 }
 
+// 創建資產並自動處理 ID 生成和並發重試
+export async function createAssetWithIdGeneration(
+  formDataObj: FormData,
+  categoryId: string,
+  categories: any[]
+) {
+    let retries = 3;
+    let lastError: any = null;
+
+    while (retries > 0) {
+        try {
+            // 1. 生成 asset_id 和新序號
+            const { assetId, newSequence } = await calculateNextAssetIdAndSequence(categoryId, categories);
+
+            // 2. 將 asset_id 加入到表單數據中
+            formDataObj.set('asset_id', assetId);
+
+            // 3. 創建資產記錄
+            const createdAsset = await pb.collection('assets').create(formDataObj);
+
+            // 4. 嘗試更新資產類別的 next_sequence
+            // 這一步如果失敗，不應阻擋整個流程，因為 ID 生成邏輯可以從現有資產中恢復
+            try {
+                await pb.collection('asset_categories').update(categoryId, {
+                    next_sequence: newSequence
+                });
+            } catch (updateError) {
+                logger.warn('更新資產類別序號失敗 (但資產已成功創建):', updateError);
+            }
+
+            return createdAsset; // 成功，返回創建的資產
+        } catch (error: any) {
+            lastError = error;
+            // 只在 asset_id 唯一性驗證失敗時重試
+            // PocketBase 錯誤結構: error.data.data.field.code
+            if (error?.data?.data?.asset_id?.code === 'validation_not_unique') {
+                retries--;
+                if (retries > 0) {
+                    logger.warn(`創建資產時 asset_id 發生衝突，正在重試... (${3 - retries}/3)`);
+                    // 等待隨機時間後重試
+                    await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 300));
+                }
+            } else {
+                throw error; // 對於其他錯誤，直接拋出
+            }
+        }
+    }
+
+    throw lastError || new Error('創建資產失敗，請稍後再試。');
+}
+
 // 生成 asset_id
 export async function generateAssetId(categoryId: string, categories: any[]): Promise<string> {
   try {
-    // 獲取選定的資產類別
-    const category = categories.find(cat => cat.id === categoryId);
-    if (!category) {
-      throw new Error('未找到選定的資產類別');
-    }
-
-    // 獲取當前類別的所有資產
-    const existingAssets = await pb.collection('assets').getList(1, 1000, {
-      filter: `category = "${categoryId}"`,
-      sort: 'asset_id'
-    });
-
-    // 找出已經使用的序號
-    const usedNumbers = new Set<number>();
-    existingAssets.items.forEach(asset => {
-      const match = asset.asset_id.match(/^([A-Z]{2})-(\d{3})$/);
-      if (match) {
-        const num = parseInt(match[2], 10);
-        usedNumbers.add(num);
-      }
-    });
-
-    // 將已使用的序號轉換為陣列並排序
-    const sortedUsedNumbers = Array.from(usedNumbers).sort((a, b) => a - b);
-
-    // 找出最小的可用序號
-    let nextNumber = 1;
-    for (const num of sortedUsedNumbers) {
-      if (num === nextNumber) {
-        nextNumber++;
-      } else if (num > nextNumber) {
-        break;
-      }
-    }
-
-    // 生成 asset_id
-    const assetId = `${category.prefix}-${nextNumber.toString().padStart(3, '0')}`;
-
+    const { assetId } = await calculateNextAssetIdAndSequence(categoryId, categories);
     return assetId;
   } catch (error) {
     logger.error('生成 asset_id 失敗:', error);
@@ -489,8 +503,8 @@ export async function generateAssetId(categoryId: string, categories: any[]): Pr
   }
 }
 
-// 生成 asset_id 並更新 next_sequence（原子操作）
-export async function generateAssetIdAndUpdateSequence(categoryId: string, categories: any[]): Promise<{ assetId: string, newSequence: number }> {
+// 計算下一個可用的 asset_id 和建議的 next_sequence
+export async function calculateNextAssetIdAndSequence(categoryId: string, categories: any[]): Promise<{ assetId: string, newSequence: number }> {
   try {
     // 獲取選定的資產類別
     const category = categories.find(cat => cat.id === categoryId);
@@ -535,7 +549,7 @@ export async function generateAssetIdAndUpdateSequence(categoryId: string, categ
 
     return { assetId, newSequence };
   } catch (error) {
-    logger.error('生成 asset_id 並更新序號失敗:', error);
+    logger.error('計算 asset_id 及序號失敗:', error);
     throw error;
   }
 }

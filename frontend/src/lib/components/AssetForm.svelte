@@ -3,6 +3,7 @@
     import { goto } from '$app/navigation';
     import { pb } from '$lib/pocketbase';
     import { Swal } from '$lib/stores';
+    import { createAssetWithIdGeneration } from '$lib/services/assetService';
 
     // Props
     export let mode: 'create' | 'edit' = 'create';
@@ -446,7 +447,6 @@
 
         // 安全機制：如果沒有要刪除的圖片，且有現有圖片，則明確保留現有圖片
         // 這是為了防止 PocketBase 在某些版本中可能清除現有圖片的問題
-        // 當有新圖片時，PocketBase 应該自動保留現有圖片，但某些版本可能有 bug
         if (deletedImages.length === 0 && existingImages.length > 0) {
             console.log('安全機制：明確保留現有圖片');
             // 使用 images+ 來明確附加空陣列，表示保留現有圖片
@@ -464,7 +464,10 @@
             // 4. 發送請求 (單次請求完成更新與刪除)
             let result;
             if (mode === 'create') {
-                result = await pb.collection('assets').create(formDataObj);
+                if (!formData.category) {
+                    throw new Error('請選擇資產類別');
+                }
+                result = await createAssetWithIdGeneration(formDataObj, formData.category, categories);
             } else if (mode === 'edit' && assetData?.id) {
                 result = await pb.collection('assets').update(assetData.id, formDataObj);
             }
@@ -581,15 +584,18 @@
             </div>
             <div class="col-md-4">
                 <label for="purchase_price" class="form-label small fw-bold text-secondary">購買價格</label>
-                <input
-                    type="number"
-                    id="purchase_price"
-                    class="form-control shadow-none"
-                    bind:value={formData.purchase_price}
-                    placeholder="0"
-                    min="0"
-                    step="0.01"
-                />
+                <div class="input-group">
+                    <span class="input-group-text">NT$</span>
+                    <input
+                        type="number"
+                        id="purchase_price"
+                        class="form-control shadow-none"
+                        bind:value={formData.purchase_price}
+                        placeholder="0"
+                        min="0"
+                        step="0.01"
+                    />
+                </div>
             </div>
             <div class="col-md-4">
                 <label for="warranty_years" class="form-label small fw-bold text-secondary">保固年數</label>
@@ -614,7 +620,7 @@
                     id="location"
                     class="form-control shadow-none"
                     bind:value={formData.location}
-                    placeholder="例如：辦公室 A、倉庫 B"
+                    placeholder="例如：辦公室、倉庫"
                 />
             </div>
             <div class="col-md-6">
@@ -624,7 +630,7 @@
                     id="department"
                     class="form-control shadow-none"
                     bind:value={formData.department}
-                    placeholder="例如：IT 部、業務部"
+                    placeholder="例如：資訊部、財務部"
                 />
             </div>
         </div>
@@ -663,7 +669,7 @@
             <div class="col-md-12 mb-2">
                 <div class="alert alert-info small p-2 mb-0">
                     <i class="mdi mdi-information-outline me-1"></i>
-                    分數說明：0 不適用 | 1 普通 | 3 內部使用 | 5-7 機密
+                    說明：0 不適用 | 1 普通 | 3 內部使用 | 5-7 機密
                 </div>
             </div>
             <div class="col-md-4">

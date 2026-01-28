@@ -5,6 +5,8 @@
     import Navbar from '$lib/components/Navbar.svelte';
     // 假設 Asset 類型與 Service 已定義
     import { getAssets, searchAssets, type Asset } from '$lib/services/assetService';
+    import { pb } from '$lib/pocketbase';
+    import { Swal } from '$lib/stores';
 
     // 由 layout 提供的使用者資料
     export let data: any;
@@ -125,6 +127,30 @@
         selectedAssets = selectedAssets.length === assets.length ? [] : assets.map(a => a.id);
     }
 
+    async function handleDelete(id: string) {
+        const result = await $Swal.fire({
+            title: '確定要刪除此資產？',
+            text: "此操作無法復原！",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: '確認刪除',
+            cancelButtonText: '取消'
+        });
+
+        if (result.isConfirmed) {
+            try {
+                await pb.collection('assets').delete(id);
+                await $Swal.fire('已刪除！', '資產已被成功刪除。', 'success');
+                loadAssets(currentPage);
+                selectedAssets = selectedAssets.filter(itemId => itemId !== id);
+            } catch (err) {
+                $Swal.fire('錯誤', '刪除資產時發生錯誤', 'error');
+            }
+        }
+    }
+
     function handleLogout() {
         logout();
         goto('/login');
@@ -233,7 +259,12 @@
                                     <td>{asset.assigned_to?.name || asset.assigned_to?.email || '未指派'}</td>
                                     <td class="text-muted small">{new Date(asset.updated).toLocaleDateString('zh-TW')}</td>
                                     <td class="text-end px-4">
-                                        <button class="btn btn-link text-danger p-0 shadow-none" title="刪除資產" aria-label="刪除資產">
+                                        <button
+                                            class="btn btn-link text-danger p-0 shadow-none"
+                                            title="刪除資產"
+                                            aria-label="刪除資產"
+                                            on:click|stopPropagation={() => handleDelete(asset.id)}
+                                        >
                                             <i class="mdi mdi-delete-outline fs-5"></i>
                                         </button>
                                     </td>
