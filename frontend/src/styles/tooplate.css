@@ -77,13 +77,13 @@ body {
 }
 
 /* Responsive navbar */
-@media (min-width: 992px) {
+@media (min-width: 1200px) {
   .navbar-expand-lg .navbar-nav .nav-link {
     padding: 15px 20px;
   }
 }
 
-@media (max-width: 1199px) {
+@media (max-width: 991px) {
   .navbar-collapse {
     background: white;
     padding: 15px;

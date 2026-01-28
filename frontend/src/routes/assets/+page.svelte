@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { goto } from '$app/navigation';
+    import { goto, replaceState } from '$app/navigation';
     import { page } from '$app/state';
     import { get } from 'svelte/store';
     import { getAssets, searchAssets, type Asset } from '$lib/services/assetService';
@@ -54,7 +54,6 @@
                     filter: filter,
                     page: page,
                     perPage: perPage,
-                    sort: sortOrder,
                     expand: 'category,assigned_to'
                 });
             } else {
@@ -62,7 +61,6 @@
                     filter: filter,
                     page: page,
                     perPage: perPage,
-                    sort: sortOrder,
                     expand: 'category,assigned_to'
                 });
             }
@@ -155,8 +153,66 @@
     function handleSort(field: string) {
         const newSortOrder = sortOrder === field ? `-${field}` : field;
         sortOrder = newSortOrder;
-        goto(`?sort=${newSortOrder}`, { keepFocus: true, noScroll: true });
-        loadAssets(1);
+        // 使用 SvelteKit 的 replaceState 避免觸發 $effect 重新載入資料
+        replaceState(`?sort=${newSortOrder}`, {});
+        // 直接在瀏覽器端排序
+        sortAssets();
+    }
+
+    // 在瀏覽器端排序資產
+    function sortAssets() {
+        if (assets.length === 0) return;
+
+        const field = sortOrder.replace('-', '');
+        const direction = sortOrder.startsWith('-') ? -1 : 1;
+
+        assets.sort((a, b) => {
+            let valueA, valueB;
+
+            switch (field) {
+                case 'asset_id':
+                    valueA = a.asset_id;
+                    valueB = b.asset_id;
+                    break;
+                case 'name':
+                    valueA = a.name;
+                    valueB = b.name;
+                    break;
+                case 'category':
+                    valueA = a.category?.name || '';
+                    valueB = b.category?.name || '';
+                    break;
+                case 'status':
+                    valueA = a.status;
+                    valueB = b.status;
+                    break;
+                case 'location':
+                    valueA = a.location || '';
+                    valueB = b.location || '';
+                    break;
+                case 'assigned_to':
+                    valueA = a.assigned_to?.name || a.assigned_to?.email || '';
+                    valueB = b.assigned_to?.name || b.assigned_to?.email || '';
+                    break;
+                case 'updated':
+                    valueA = new Date(a.updated).getTime();
+                    valueB = new Date(b.updated).getTime();
+                    break;
+                default:
+                    return 0;
+            }
+
+            // 確保排序的穩定性，當值相同時保持原有順序
+            if (valueA === valueB) return 0;
+
+            if (typeof valueA === 'string' && typeof valueB === 'string') {
+                return valueA.localeCompare(valueB) * direction;
+            } else if (typeof valueA === 'number' && typeof valueB === 'number') {
+                return (valueA - valueB) * direction;
+            }
+
+            return 0;
+        });
     }
 
     function handleLogout() {
@@ -169,7 +225,10 @@
         if (urlSort) {
             sortOrder = urlSort;
         }
-        loadAssets();
+        // 使用 setTimeout 確保 DOM 完全載入後再載入資料，避免自動取消
+        setTimeout(() => {
+            loadAssets();
+        }, 0);
     });
 </script>
 
