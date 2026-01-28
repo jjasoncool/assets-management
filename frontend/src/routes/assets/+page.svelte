@@ -1,30 +1,32 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
-    import { logout } from '$lib/services/userService';
-    import Navbar from '$lib/components/Navbar.svelte';
-    // 假設 Asset 類型與 Service 已定義
+    import { page } from '$app/state';
+    import { get } from 'svelte/store';
     import { getAssets, searchAssets, type Asset } from '$lib/services/assetService';
+    import { logout } from '$lib/services/userService';
     import { pb } from '$lib/pocketbase';
     import { Swal } from '$lib/stores';
+    import Navbar from '$lib/components/Navbar.svelte';
 
-    // 由 layout 提供的使用者資料
-    export let data: any;
-    let currentUser = data?.currentUser;
+    let { data } = $props();
+    let currentUser = $derived(data?.currentUser);
 
     // 資產數據狀態
-    let assets: Asset[] = [];
-    let loading = true;
-    let error: string | null = null;
-    let selectedAssets: string[] = [];
+    let assets = $state<Asset[]>([]);
+    let loading = $state(true);
+    let error = $state<string | null>(null);
+    let selectedAssets = $state<string[]>([]);
 
-    // 搜尋與分頁狀態
-    let searchQuery = '';
-    let statusFilter = '';
-    let currentPage = 1;
+    // 搜尋、過濾與排序狀態
+    let searchQuery = $state('');
+    let statusFilter = $state('');
+    let sortOrder = $state('asset_id'); // 預設排序
+
+    // 分頁狀態
+    let currentPage = $state(1);
     let perPage = 20;
-    let totalItems = 0;
-    let totalPages = 0;
+    let totalItems = $state(0);
+    let totalPages = $state(0);
 
     // 狀態選項配置
     const statusOptions = [
@@ -44,7 +46,7 @@
             loading = true;
             error = null;
 
-            let filter = statusFilter ? `status = "${statusFilter}"` : '';
+            const filter = statusFilter ? `status = "${statusFilter}"` : '';
 
             let result;
             if (searchQuery.trim()) {
@@ -52,7 +54,7 @@
                     filter: filter,
                     page: page,
                     perPage: perPage,
-                    sort: '-updated',
+                    sort: sortOrder,
                     expand: 'category,assigned_to'
                 });
             } else {
@@ -60,18 +62,14 @@
                     filter: filter,
                     page: page,
                     perPage: perPage,
-                    sort: '-updated',
+                    sort: sortOrder,
                     expand: 'category,assigned_to'
                 });
             }
 
-            // PocketBase 將關聯資料放在 'expand' 屬性中。
-            // 這裡我們將 expand 內的資料映射回主物件，以符合 Asset 介面定義並讓表格正確顯示。
             assets = result.items.map((record: any) => ({
                 ...record,
-                // 如果有 expand.category，就用它覆蓋原本只是 ID 的 category 欄位
                 category: record.expand?.category,
-                // 同理，處理 assigned_to 讓負責人也能正確顯示
                 assigned_to: record.expand?.assigned_to
             })) as unknown as Asset[];
 
@@ -128,7 +126,9 @@
     }
 
     async function handleDelete(id: string) {
-        const result = await $Swal.fire({
+        // 從 store 獲取 Swal 實例
+        const swalInstance = get(Swal);
+        const result = await swalInstance.fire({
             title: '確定要刪除此資產？',
             text: "此操作無法復原！",
             icon: 'warning',
@@ -142,13 +142,21 @@
         if (result.isConfirmed) {
             try {
                 await pb.collection('assets').delete(id);
-                await $Swal.fire('已刪除！', '資產已被成功刪除。', 'success');
+                await swalInstance.fire('已刪除！', '資產已被成功刪除。', 'success');
                 loadAssets(currentPage);
                 selectedAssets = selectedAssets.filter(itemId => itemId !== id);
             } catch (err) {
-                $Swal.fire('錯誤', '刪除資產時發生錯誤', 'error');
+                swalInstance.fire('錯誤', '刪除資產時發生錯誤', 'error');
             }
         }
+    }
+
+    // 處理排序
+    function handleSort(field: string) {
+        const newSortOrder = sortOrder === field ? `-${field}` : field;
+        sortOrder = newSortOrder;
+        goto(`?sort=${newSortOrder}`, { keepFocus: true, noScroll: true });
+        loadAssets(1);
     }
 
     function handleLogout() {
@@ -156,7 +164,13 @@
         goto('/login');
     }
 
-    onMount(() => loadAssets());
+    $effect(() => {
+        const urlSort = page.url.searchParams.get('sort');
+        if (urlSort) {
+            sortOrder = urlSort;
+        }
+        loadAssets();
+    });
 </script>
 
 <svelte:head>
@@ -177,20 +191,21 @@
                             id="search"
                             class="form-control shadow-none"
                             placeholder="輸入名稱、編號或序號..."
-                            bind:value={searchQuery}
-                            on:keydown={(e) => e.key === 'Enter' && handleSearch()}
+                            value={searchQuery}
+                            oninput={(e) => searchQuery = e.currentTarget.value}
+                            onkeydown={(e) => e.key === 'Enter' && handleSearch()}
                         />
                     </div>
                     <div class="col-md-3">
                         <label for="status" class="form-label small fw-bold text-secondary">狀態過濾</label>
-                        <select id="status" class="form-select shadow-none" bind:value={statusFilter} on:change={handleSearch}>
+                        <select id="status" class="form-select shadow-none" value={statusFilter} onchange={(e) => { statusFilter = e.currentTarget.value; handleSearch(); }}>
                             {#each statusOptions as option}
                                 <option value={option.value}>{option.label}</option>
                             {/each}
                         </select>
                     </div>
                     <div class="col-md-2">
-                        <button class="btn btn-primary w-100" on:click={handleSearch}>
+                        <button class="btn btn-primary w-100" onclick={handleSearch}>
                             <i class="mdi mdi-magnify"></i> 搜尋
                         </button>
                     </div>
@@ -210,23 +225,58 @@
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light text-muted">
-                        <tr>
+                        <tr class="user-select-none">
                             <th style="width: 40px;">
                                 <input
                                     type="checkbox"
                                     class="form-check-input"
                                     checked={selectedAssets.length === assets.length && assets.length > 0}
-                                    on:change={toggleSelectAll}
+                                    onchange={toggleSelectAll}
                                 />
                             </th>
-                            <th>資產編號</th>
-                            <th>名稱</th>
-                            <th>類別</th>
+                            <th class="cursor-pointer" onclick={() => handleSort('asset_id')}>
+                                資產編號
+                                {#if sortOrder.includes('asset_id')}
+                                    <i class="mdi {sortOrder === 'asset_id' ? 'mdi-arrow-up' : 'mdi-arrow-down'}"></i>
+                                {/if}
+                            </th>
+                            <th class="cursor-pointer" onclick={() => handleSort('name')}>
+                                名稱
+                                {#if sortOrder.includes('name')}
+                                    <i class="mdi {sortOrder === 'name' ? 'mdi-arrow-up' : 'mdi-arrow-down'}"></i>
+                                {/if}
+                            </th>
+                            <th class="cursor-pointer" onclick={() => handleSort('category')}>
+                                類別
+                                {#if sortOrder.includes('category')}
+                                    <i class="mdi {sortOrder === 'category' ? 'mdi-arrow-up' : 'mdi-arrow-down'}"></i>
+                                {/if}
+                            </th>
                             <th>品牌/型號</th>
-                            <th>狀態</th>
-                            <th>位置</th>
-                            <th>負責人</th>
-                            <th>更新時間</th>
+                            <th class="cursor-pointer" onclick={() => handleSort('status')}>
+                                狀態
+                                {#if sortOrder.includes('status')}
+                                    <i class="mdi {sortOrder === 'status' ? 'mdi-arrow-up' : 'mdi-arrow-down'}"></i>
+                                {/if}
+                            </th>
+                            <th class="cursor-pointer" onclick={() => handleSort('location')}>
+                                位置
+                                {#if sortOrder.includes('location')}
+                                    <i class="mdi {sortOrder === 'location' ? 'mdi-arrow-up' : 'mdi-arrow-down'}"></i>
+                                {/if}
+                            </th>
+                            <th class="cursor-pointer" onclick={() => handleSort('assigned_to')}>
+                                負責人
+                                {#if sortOrder.includes('assigned_to')}
+                                    <i class="mdi {sortOrder === 'assigned_to' ? 'mdi-arrow-up' : 'mdi-arrow-down'}"></i>
+                                {/if}
+                            </th>
+                            <th class="cursor-pointer" onclick={() => handleSort('updated')}>
+                                更新時間
+                                {#if sortOrder.includes('updated')}
+                                    <i class="mdi {sortOrder === 'updated' ? 'mdi-arrow-up' : 'mdi-arrow-down'}"></i>
+                                {/if}
+                            </th>
                             <th class="text-end px-4">操作</th>
                         </tr>
                     </thead>
@@ -237,13 +287,13 @@
                             <tr><td colspan="10" class="text-center py-5 text-muted">找不到任何資產</td></tr>
                         {:else}
                             {#each assets as asset}
-                                <tr class="cursor-pointer" on:click={() => goto(`/assets/${asset.id}/edit`)}>
-                                    <td on:click|stopPropagation>
+                                <tr class="cursor-pointer" onclick={() => goto(`/assets/${asset.id}/edit`)}>
+                                    <td onclick={(e) => e.stopPropagation()}>
                                         <input
                                             type="checkbox"
                                             class="form-check-input"
                                             checked={selectedAssets.includes(asset.id)}
-                                            on:change={() => toggleAssetSelection(asset.id)}
+                                            onchange={() => toggleAssetSelection(asset.id)}
                                         />
                                     </td>
                                     <td class="fw-medium">{asset.asset_id}</td>
@@ -263,7 +313,7 @@
                                             class="btn btn-link text-danger p-0 shadow-none"
                                             title="刪除資產"
                                             aria-label="刪除資產"
-                                            on:click|stopPropagation={() => handleDelete(asset.id)}
+                                            onclick={(e) => { e.stopPropagation(); handleDelete(asset.id); }}
                                         >
                                             <i class="mdi mdi-delete-outline fs-5"></i>
                                         </button>
@@ -284,7 +334,7 @@
                     <nav aria-label="分頁">
                         <ul class="pagination pagination-sm mb-0">
                             <li class="page-item {currentPage === 1 ? 'disabled' : ''}">
-                                <button class="page-link" on:click={() => goToPage(currentPage - 1)}>
+                                <button class="page-link" onclick={() => goToPage(currentPage - 1)}>
                                     &larr;
                                 </button>
                             </li>
@@ -292,7 +342,7 @@
                             {#each Array.from({length: totalPages}) as _, i}
                                 {#if i + 1 === 1 || i + 1 === totalPages || (i + 1 >= currentPage - 1 && i + 1 <= currentPage + 1)}
                                     <li class="page-item {currentPage === i + 1 ? 'active' : ''}">
-                                        <button class="page-link" on:click={() => goToPage(i + 1)}>{i + 1}</button>
+                                        <button class="page-link" onclick={() => goToPage(i + 1)}>{i + 1}</button>
                                     </li>
                                 {:else if i + 1 === currentPage - 2 || i + 1 === currentPage + 2}
                                     <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -300,7 +350,7 @@
                             {/each}
 
                             <li class="page-item {currentPage === totalPages ? 'disabled' : ''}">
-                                <button class="page-link" on:click={() => goToPage(currentPage + 1)}>
+                                <button class="page-link" onclick={() => goToPage(currentPage + 1)}>
                                     &rarr;
                                 </button>
                             </li>

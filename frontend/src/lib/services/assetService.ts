@@ -1,7 +1,10 @@
 import { pb } from '../pocketbase';
 import { logger } from '../utils/logger';
 
-// 資產類別相關操作
+// =================================================================
+// 介面
+// =================================================================
+
 export interface AssetCategory {
   id: string;
   name: string;
@@ -12,7 +15,6 @@ export interface AssetCategory {
   updated: string;
 }
 
-// 資產相關操作
 export interface Asset {
   id: string;
   asset_id: string;
@@ -46,28 +48,14 @@ export interface Asset {
   updated: string;
 }
 
-// 借還記錄
-export interface BorrowRecord {
-  id: string;
-  assetId: string;
-  userId: string;
-  borrowDate: string;
-  expectedReturnDate?: string;
-  actualReturnDate?: string;
-  status: 'borrowed' | 'returned' | 'overdue';
-  notes?: string;
-  created: string;
-  updated: string;
-  // 展開的關聯數據
-  asset?: Asset;
-  user?: {
-    id: string;
-    name?: string;
-    email: string;
-  };
-}
 
-// 獲取所有資產
+// =================================================================
+// 資產函式
+// =================================================================
+
+/**
+ * 獲取資產的分頁列表
+ */
 export async function getAssets(options?: {
   filter?: string;
   sort?: string;
@@ -92,18 +80,26 @@ export async function getAssets(options?: {
   }
 }
 
-// 獲取單個資產
+/**
+ * 透過 ID 獲取單個資產
+ */
 export async function getAsset(id: string) {
   try {
-    const record = await pb.collection('assets').getOne(id);
+    const record = await pb.collection('assets').getOne(id, {
+        expand: 'category,assigned_to'
+    });
     return record as unknown as Asset;
   } catch (error) {
-    logger.error('獲取資產失敗:', error);
+    logger.error(`獲取資產 ${id} 失敗:`, error);
     throw error;
   }
 }
 
-// 創建資產
+/**
+ * 創建一個新資產
+ * 注意：此函式不處理資產 ID 生成
+ * 請使用 `createAssetWithIdGeneration`
+ */
 export async function createAsset(data: Omit<Asset, 'id' | 'created' | 'updated'>) {
   try {
     const record = await pb.collection('assets').create(data);
@@ -115,30 +111,36 @@ export async function createAsset(data: Omit<Asset, 'id' | 'created' | 'updated'
   }
 }
 
-// 更新資產
+/**
+ * 更新現有資產
+ */
 export async function updateAsset(id: string, data: Partial<Omit<Asset, 'id' | 'created' | 'updated'>>) {
   try {
     const record = await pb.collection('assets').update(id, data);
-    logger.log('資產更新成功:', record);
+    logger.log(`資產 ${id} 更新成功:`, record);
     return record as unknown as Asset;
   } catch (error) {
-    logger.error('更新資產失敗:', error);
+    logger.error(`更新資產 ${id} 失敗:`, error);
     throw error;
   }
 }
 
-// 刪除資產
+/**
+ * 透過 ID 刪除資產
+ */
 export async function deleteAsset(id: string) {
   try {
     await pb.collection('assets').delete(id);
-    logger.log('資產刪除成功:', id);
+    logger.log(`資產 ${id} 刪除成功`);
   } catch (error) {
-    logger.error('刪除資產失敗:', error);
+    logger.error(`刪除資產 ${id} 失敗:`, error);
     throw error;
   }
 }
 
-// 搜索資產
+/**
+ * 根據查詢字串搜尋資產
+ */
 export async function searchAssets(query: string, options?: {
   filter?: string;
   sort?: string;
@@ -147,175 +149,138 @@ export async function searchAssets(query: string, options?: {
   expand?: string;
 }) {
   try {
-    const filter = `name ~ "${query}" || notes ~ "${query}" || serial_number ~ "${query}" || asset_id ~ "${query}"`;
+    const baseFilter = `name ~ "${query}" || notes ~ "${query}" || serial_number ~ "${query}" || asset_id ~ "${query}"`;
+    const combinedFilter = options?.filter ? `${baseFilter} && ${options.filter}` : baseFilter;
+
     const records = await pb.collection('assets').getList(
       options?.page || 1,
       options?.perPage || 50,
       {
-        filter: options?.filter ? `${filter} && ${options.filter}` : filter,
+        filter: combinedFilter,
         sort: options?.sort,
         expand: options?.expand || 'category,assigned_to'
       }
     );
     return records;
   } catch (error) {
-    logger.error('搜索資產失敗:', error);
+    logger.error('搜尋資產失敗:', error);
     throw error;
   }
 }
 
-// ============ 借還功能 ============
+// =================================================================
+// 資產 ID 生成
+// =================================================================
 
-// 借出資產
-export async function borrowAsset(assetId: string, expectedReturnDate?: string, notes?: string) {
-  try {
-    const user = pb.authStore.model;
-    if (!user) throw new Error('未登入');
+/**
+ * 創建資產並自動生成 asset_id，處理並發重試
+ */
+export async function createAssetWithIdGeneration(
+  formDataObj: FormData,
+  categoryId: string,
+  categories: any[]
+) {
+    let retries = 3;
+    let lastError: any = null;
 
-    // 檢查資產狀態
-    const asset = await getAsset(assetId);
-    if (asset.status !== 'active') {
-      throw new Error('資產目前不可借用');
+    while (retries > 0) {
+        try {
+            const { assetId, newSequence } = await calculateNextAssetIdAndSequence(categoryId, categories);
+            formDataObj.set('asset_id', assetId);
+
+            const createdAsset = await pb.collection('assets').create(formDataObj);
+
+            try {
+                await pb.collection('asset_categories').update(categoryId, {
+                    next_sequence: newSequence
+                });
+            } catch (updateError) {
+                logger.warn('更新資產類別序號失敗 (但資產已成功創建):', updateError);
+            }
+
+            return createdAsset; // 成功
+        } catch (error: any) {
+            lastError = error;
+            if (error?.data?.data?.asset_id?.code === 'validation_not_unique') {
+                retries--;
+                if (retries > 0) {
+                    logger.warn(`創建資產時 asset_id 發生衝突，正在重試... (${3 - retries}/3)`);
+                    await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 300));
+                }
+            } else {
+                throw error; // 立即重新拋出其他錯誤
+            }
+        }
     }
 
-    // 創建借還記錄
-    const borrowRecord = await pb.collection('borrowRecords').create({
-      assetId: assetId,
-      userId: user.id,
-      borrowDate: new Date().toISOString(),
-      expectedReturnDate: expectedReturnDate,
-      status: 'borrowed',
-      notes: notes
-    });
-
-    // 更新資產狀態
-    await updateAsset(assetId, { status: 'borrowed' });
-
-    logger.log('資產借出成功:', borrowRecord);
-    return borrowRecord as unknown as BorrowRecord;
-  } catch (error) {
-    logger.error('借出資產失敗:', error);
-    throw error;
-  }
+    throw lastError || new Error('多次重試後創建資產失敗');
 }
 
-// 歸還資產
-export async function returnAsset(borrowRecordId: string, notes?: string) {
-  try {
-    const user = pb.authStore.model;
-    if (!user) throw new Error('未登入');
+/**
+ * 計算下一個可用的資產 ID 和建議的下一個序號
+ */
+export async function calculateNextAssetIdAndSequence(categoryId: string, categories: any[]): Promise<{ assetId: string, newSequence: number }> {
+    try {
+        const category = categories.find(cat => cat.id === categoryId);
+        if (!category) {
+            throw new Error('未找到指定的資產類別');
+        }
 
-    // 獲取借還記錄
-    const borrowRecord = await pb.collection('borrowRecords').getOne(borrowRecordId);
-    if (borrowRecord.userId !== user.id) {
-      throw new Error('只能歸還自己借出的資產');
+        const existingAssets = await pb.collection('assets').getList(1, 1000, {
+            filter: `category = "${categoryId}"`,
+            sort: 'asset_id'
+        });
+
+        const usedNumbers = new Set<number>();
+        existingAssets.items.forEach(asset => {
+            const match = asset.asset_id.match(/^([A-Z]{2})-(\d{3})$/);
+            if (match) {
+                usedNumbers.add(parseInt(match[2], 10));
+            }
+        });
+
+        const sortedUsedNumbers = Array.from(usedNumbers).sort((a, b) => a - b);
+        let nextNumber = 1;
+        for (const num of sortedUsedNumbers) {
+            if (num === nextNumber) {
+                nextNumber++;
+            } else if (num > nextNumber) {
+                break;
+            }
+        }
+
+        const assetId = `${category.prefix}-${nextNumber.toString().padStart(3, '0')}`;
+        const newSequence = Math.max(category.next_sequence, nextNumber) + 1;
+
+        return { assetId, newSequence };
+    } catch (error) {
+        logger.error('計算資產 ID 和序號失敗:', error);
+        throw error;
     }
-
-    // 更新借還記錄
-    const updatedRecord = await pb.collection('borrowRecords').update(borrowRecordId, {
-      actualReturnDate: new Date().toISOString(),
-      status: 'returned',
-      notes: notes || borrowRecord.notes
-    });
-
-    // 更新資產狀態
-    await updateAsset(borrowRecord.assetId, { status: 'active' });
-
-    logger.log('資產歸還成功:', updatedRecord);
-    return updatedRecord as unknown as BorrowRecord;
-  } catch (error) {
-    logger.error('歸還資產失敗:', error);
-    throw error;
-  }
 }
 
-// 獲取借還記錄
-export async function getBorrowRecords(options?: {
-  filter?: string;
-  sort?: string;
-  page?: number;
-  perPage?: number;
-  expand?: string;
-}) {
+
+/**
+ * 一個更簡單的工具，僅生成下一個資產 ID
+ */
+export async function generateAssetId(categoryId: string, categories: any[]): Promise<string> {
   try {
-    const records = await pb.collection('borrowRecords').getList(
-      options?.page || 1,
-      options?.perPage || 50,
-      {
-        filter: options?.filter,
-        sort: options?.sort,
-        expand: options?.expand || 'asset,user'
-      }
-    );
-    return records;
+    const { assetId } = await calculateNextAssetIdAndSequence(categoryId, categories);
+    return assetId;
   } catch (error) {
-    logger.error('獲取借還記錄失敗:', error);
+    logger.error('生成資產 ID 失敗:', error);
     throw error;
   }
 }
 
-// 獲取我的借還記錄
-export async function getMyBorrowRecords(options?: {
-  status?: string;
-  page?: number;
-  perPage?: number;
-}) {
-  try {
-    const user = pb.authStore.model;
-    if (!user) throw new Error('未登入');
 
-    let filter = `userId = "${user.id}"`;
-    if (options?.status) {
-      filter += ` && status = "${options.status}"`;
-    }
+// =================================================================
+// 資產類別函式
+// =================================================================
 
-    const records = await getBorrowRecords({
-      filter: filter,
-      sort: '-created',
-      page: options?.page,
-      perPage: options?.perPage,
-      expand: 'asset,user'
-    });
-
-    return records;
-  } catch (error) {
-    logger.error('獲取我的借還記錄失敗:', error);
-    throw error;
-  }
-}
-
-// 獲取當前借出的資產
-export async function getCurrentBorrowedAssets() {
-  try {
-    const user = pb.authStore.model;
-    if (!user) throw new Error('未登入');
-
-    const records = await getBorrowRecords({
-      filter: `userId = "${user.id}" && status = "borrowed"`,
-      expand: 'asset,user'
-    });
-
-    return records;
-  } catch (error) {
-    logger.error('獲取當前借出資產失敗:', error);
-    throw error;
-  }
-}
-
-// 檢查資產是否可借
-export async function checkAssetAvailability(assetId: string) {
-  try {
-    const asset = await getAsset(assetId);
-    return asset.status === 'active';
-  } catch (error) {
-    logger.error('檢查資產可用性失敗:', error);
-    throw error;
-  }
-}
-
-// ============ 資產類別功能 ============
-
-// 獲取所有資產類別
+/**
+ * 獲取資產類別的分頁列表
+ */
 export async function getAssetCategories(options?: {
   filter?: string;
   sort?: string;
@@ -338,218 +303,87 @@ export async function getAssetCategories(options?: {
   }
 }
 
-// 獲取單個資產類別
+/**
+ * 透過 ID 獲取單個資產類別
+ */
 export async function getAssetCategory(id: string) {
   try {
     const record = await pb.collection('asset_categories').getOne(id);
     return record as unknown as AssetCategory;
   } catch (error) {
-    logger.error('獲取資產類別失敗:', error);
+    logger.error(`獲取資產類別 ${id} 失敗:`, error);
     throw error;
   }
 }
 
-// 創建資產類別
+/**
+ * 創建一個新的資產類別 (僅限管理員)
+ */
 export async function createAssetCategory(data: Omit<AssetCategory, 'id' | 'created' | 'updated'>) {
-  try {
-    const user = pb.authStore.model;
-    if (!user) throw new Error('未登入');
+    try {
+        const user = pb.authStore.model;
+        if (!user || !Array.isArray(user.role) || !user.role.includes('admin')) {
+            throw new Error('需要管理員權限才能創建資產類別');
+        }
 
-    // 檢查用戶是否具有 admin 角色
-    const userRoles = user.role || [];
-    if (!Array.isArray(userRoles) || !userRoles.includes('admin')) {
-      throw new Error('需要管理員權限才能創建資產類別');
+        if (!data.name || typeof data.name !== 'string') throw new Error('類別名稱是必要的，且必須是字串');
+        if (!data.prefix || typeof data.prefix !== 'string' || data.prefix.length !== 2) throw new Error('類別前綴是必要的，且必須是 2 個字元的字串');
+        if (typeof data.next_sequence !== 'number' || data.next_sequence < 1) throw new Error('next_sequence 是必要的，且必須是數字 >= 1');
+
+        const submitData = {
+            name: data.name.trim(),
+            prefix: data.prefix.trim().toUpperCase(),
+            next_sequence: data.next_sequence,
+            description: data.description ? data.description.trim() : ''
+        };
+
+        const record = await pb.collection('asset_categories').create(submitData);
+        logger.log('資產類別創建成功:', record);
+        return record as unknown as AssetCategory;
+    } catch (error: any) {
+        logger.error('創建資產類別失敗:', error);
+        if (error.message.includes('Failed to create record')) {
+            const cause = error.cause as any;
+            throw new Error('創建資產類別失敗: ' + (cause?.message || '數據驗證失敗'));
+        }
+        throw error;
     }
-
-    // 驗證數據
-    if (!data.name || typeof data.name !== 'string') {
-      throw new Error('類別名稱是必要的，並且必須是字串');
-    }
-
-    if (!data.prefix || typeof data.prefix !== 'string' || data.prefix.length !== 2) {
-      throw new Error('類別前綴是必要的，必須是 2 個字元的字串');
-    }
-
-    if (typeof data.next_sequence !== 'number' || data.next_sequence < 1) {
-      throw new Error('next_sequence 是必要的，必須是大於或等於 1 的數字');
-    }
-
-    // 準備數據
-    const submitData = {
-      name: data.name.trim(),
-      prefix: data.prefix.trim().toUpperCase(),
-      next_sequence: data.next_sequence,
-      description: data.description ? data.description.trim() : ''
-    };
-
-    const record = await pb.collection('asset_categories').create(submitData);
-    logger.log('資產類別創建成功:', record);
-    return record as unknown as AssetCategory;
-  } catch (error) {
-    logger.error('創建資產類別失敗:', error);
-
-    // 提供更詳細的錯誤信息
-    if (error instanceof Error) {
-      if (error.message.includes('Failed to create record')) {
-        const cause = error.cause as any;
-        throw new Error('創建資產類別失敗：' + (cause?.message || '數據驗證失敗'));
-      }
-    }
-
-    throw error;
-  }
 }
 
-// 更新資產類別
+
+/**
+ * 更新資產類別 (僅限管理員)
+ */
 export async function updateAssetCategory(id: string, data: Partial<Omit<AssetCategory, 'id' | 'created' | 'updated'>>) {
   try {
     const user = pb.authStore.model;
-    if (!user) throw new Error('未登入');
-
-    // 檢查用戶是否具有 admin 角色
-    const userRoles = user.role || [];
-    if (!Array.isArray(userRoles) || !userRoles.includes('admin')) {
+    if (!user || !Array.isArray(user.role) || !user.role.includes('admin')) {
       throw new Error('需要管理員權限才能更新資產類別');
     }
 
     const record = await pb.collection('asset_categories').update(id, data);
-    logger.log('資產類別更新成功:', record);
+    logger.log(`資產類別 ${id} 更新成功:`, record);
     return record as unknown as AssetCategory;
   } catch (error) {
-    logger.error('更新資產類別失敗:', error);
+    logger.error(`更新資產類別 ${id} 失敗:`, error);
     throw error;
   }
 }
 
-// 刪除資產類別
+/**
+ * 刪除資產類別 (僅限管理員)
+ */
 export async function deleteAssetCategory(id: string) {
   try {
     const user = pb.authStore.model;
-    if (!user) throw new Error('未登入');
-
-    // 檢查用戶是否具有 admin 角色
-    const userRoles = user.role || [];
-    if (!Array.isArray(userRoles) || !userRoles.includes('admin')) {
-      throw new Error('需要管理員權限才能刪除資產類別');
+    if (!user || !Array.isArray(user.role) || !user.role.includes('admin')) {
+        throw new Error('需要管理員權限才能刪除資產類別');
     }
 
     await pb.collection('asset_categories').delete(id);
-    logger.log('資產類別刪除成功:', id);
+    logger.log(`資產類別 ${id} 刪除成功`);
   } catch (error) {
-    logger.error('刪除資產類別失敗:', error);
-    throw error;
-  }
-}
-
-// 創建資產並自動處理 ID 生成和並發重試
-export async function createAssetWithIdGeneration(
-  formDataObj: FormData,
-  categoryId: string,
-  categories: any[]
-) {
-    let retries = 3;
-    let lastError: any = null;
-
-    while (retries > 0) {
-        try {
-            // 1. 生成 asset_id 和新序號
-            const { assetId, newSequence } = await calculateNextAssetIdAndSequence(categoryId, categories);
-
-            // 2. 將 asset_id 加入到表單數據中
-            formDataObj.set('asset_id', assetId);
-
-            // 3. 創建資產記錄
-            const createdAsset = await pb.collection('assets').create(formDataObj);
-
-            // 4. 嘗試更新資產類別的 next_sequence
-            // 這一步如果失敗，不應阻擋整個流程，因為 ID 生成邏輯可以從現有資產中恢復
-            try {
-                await pb.collection('asset_categories').update(categoryId, {
-                    next_sequence: newSequence
-                });
-            } catch (updateError) {
-                logger.warn('更新資產類別序號失敗 (但資產已成功創建):', updateError);
-            }
-
-            return createdAsset; // 成功，返回創建的資產
-        } catch (error: any) {
-            lastError = error;
-            // 只在 asset_id 唯一性驗證失敗時重試
-            // PocketBase 錯誤結構: error.data.data.field.code
-            if (error?.data?.data?.asset_id?.code === 'validation_not_unique') {
-                retries--;
-                if (retries > 0) {
-                    logger.warn(`創建資產時 asset_id 發生衝突，正在重試... (${3 - retries}/3)`);
-                    // 等待隨機時間後重試
-                    await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 300));
-                }
-            } else {
-                throw error; // 對於其他錯誤，直接拋出
-            }
-        }
-    }
-
-    throw lastError || new Error('創建資產失敗，請稍後再試。');
-}
-
-// 生成 asset_id
-export async function generateAssetId(categoryId: string, categories: any[]): Promise<string> {
-  try {
-    const { assetId } = await calculateNextAssetIdAndSequence(categoryId, categories);
-    return assetId;
-  } catch (error) {
-    logger.error('生成 asset_id 失敗:', error);
-    throw error;
-  }
-}
-
-// 計算下一個可用的 asset_id 和建議的 next_sequence
-export async function calculateNextAssetIdAndSequence(categoryId: string, categories: any[]): Promise<{ assetId: string, newSequence: number }> {
-  try {
-    // 獲取選定的資產類別
-    const category = categories.find(cat => cat.id === categoryId);
-    if (!category) {
-      throw new Error('未找到選定的資產類別');
-    }
-
-    // 獲取當前類別的所有資產
-    const existingAssets = await pb.collection('assets').getList(1, 1000, {
-      filter: `category = "${categoryId}"`,
-      sort: 'asset_id'
-    });
-
-    // 找出已經使用的序號
-    const usedNumbers = new Set<number>();
-    existingAssets.items.forEach(asset => {
-      const match = asset.asset_id.match(/^([A-Z]{2})-(\d{3})$/);
-      if (match) {
-        const num = parseInt(match[2], 10);
-        usedNumbers.add(num);
-      }
-    });
-
-    // 將已使用的序號轉換為陣列並排序
-    const sortedUsedNumbers = Array.from(usedNumbers).sort((a, b) => a - b);
-
-    // 找出最小的可用序號
-    let nextNumber = 1;
-    for (const num of sortedUsedNumbers) {
-      if (num === nextNumber) {
-        nextNumber++;
-      } else if (num > nextNumber) {
-        break;
-      }
-    }
-
-    // 生成 asset_id
-    const assetId = `${category.prefix}-${nextNumber.toString().padStart(3, '0')}`;
-
-    // 計算新的序號（確保大於當前 next_sequence）
-    const newSequence = Math.max(category.next_sequence, nextNumber) + 1;
-
-    return { assetId, newSequence };
-  } catch (error) {
-    logger.error('計算 asset_id 及序號失敗:', error);
+    logger.error(`刪除資產類別 ${id} 失敗:`, error);
     throw error;
   }
 }
