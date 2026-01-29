@@ -5,8 +5,9 @@
     import { getAssets, searchAssets, type Asset } from '$lib/services/assetService';
     import { logout } from '$lib/services/userService';
     import { pb } from '$lib/pocketbase';
-    import { Swal } from '$lib/stores';
+    import { bs, Swal } from '$lib/stores';
     import Navbar from '$lib/components/Navbar.svelte';
+    import BorrowForm from '$lib/components/BorrowForm.svelte';
 
     let { data } = $props();
     let currentUser = $derived(data?.currentUser);
@@ -27,6 +28,13 @@
     let perPage = 20;
     let totalItems = $state(0);
     let totalPages = $state(0);
+
+    // Modal state
+    let borrowModalElement: HTMLElement;
+    let borrowModalInstance: any | null = $state(null);
+    let selectedAssetForBorrow: Asset | null = $state(null);
+    let bsInstance: any = null;
+	bs.subscribe(value => bsInstance = value);
 
     // 狀態選項配置
     const statusOptions = [
@@ -79,6 +87,36 @@
         } finally {
             loading = false;
         }
+    }
+
+    // Modal handlers
+    function showBorrowModal(asset: Asset) {
+        selectedAssetForBorrow = asset;
+        borrowModalInstance?.show();
+    }
+
+    function handleBorrowSuccess() {
+        borrowModalInstance?.hide();
+        get(Swal).fire({
+            title: '成功',
+            text: '資產借用申請成功！',
+            icon: 'success',
+            timer: 2000,
+            showConfirmButton: false
+        });
+        // Update the status of the borrowed asset in the list
+        if (selectedAssetForBorrow) {
+            const index = assets.findIndex(a => a.id === selectedAssetForBorrow!.id);
+            if (index !== -1) {
+                assets[index].status = 'borrowed'; // Or 'pending' depending on the flow
+                assets = [...assets]; // Trigger reactivity
+            }
+        }
+    }
+
+    function handleBorrowClick(event: MouseEvent, asset: Asset) {
+        event.stopPropagation();
+        showBorrowModal(asset);
     }
 
     // 處理搜尋與過濾
@@ -221,6 +259,11 @@
     }
 
     $effect(() => {
+        // Initialize modal
+        if (borrowModalElement && bsInstance) {
+            borrowModalInstance = new bsInstance.Modal(borrowModalElement);
+        }
+
         const urlSort = page.url.searchParams.get('sort');
         if (urlSort) {
             sortOrder = urlSort;
@@ -229,6 +272,11 @@
         setTimeout(() => {
             loadAssets();
         }, 0);
+
+        // Cleanup modal instance
+        return () => {
+            borrowModalInstance?.dispose();
+        }
     });
 </script>
 
@@ -367,15 +415,22 @@
                                     <td>{asset.location || '-'}</td>
                                     <td>{asset.assigned_to?.name || asset.assigned_to?.email || '未指派'}</td>
                                     <td class="text-muted small">{new Date(asset.updated).toLocaleDateString('zh-TW')}</td>
-                                    <td class="text-end px-4">
-                                        <button
-                                            class="btn btn-link text-danger p-0 shadow-none"
-                                            title="刪除資產"
-                                            aria-label="刪除資產"
-                                            onclick={(e) => { e.stopPropagation(); handleDelete(asset.id); }}
-                                        >
-                                            <i class="mdi mdi-delete-outline fs-5"></i>
-                                        </button>
+                                    <td class="text-end px-4" onclick={(e) => e.stopPropagation()}>
+                                        {#if asset.status === 'active'}
+                                            <button onclick={(e) => handleBorrowClick(e, asset)} class="btn btn-sm btn-outline-primary me-2" title="借用">
+                                                <i class="mdi mdi-hand-heart"></i> 借用
+                                            </button>
+                                        {/if}
+                                        {#if currentUser?.role?.includes('admin')}
+                                            <button
+                                                class="btn btn-link text-danger p-0 shadow-none"
+                                                title="刪除資產"
+                                                aria-label="刪除資產"
+                                                onclick={(e) => { e.stopPropagation(); handleDelete(asset.id); }}
+                                            >
+                                                <i class="mdi mdi-delete-outline fs-5"></i>
+                                            </button>
+                                        {/if}
                                     </td>
                                 </tr>
                             {/each}
@@ -386,9 +441,11 @@
 
             <div class="card-footer bg-white py-3 border-0">
                 <div class="d-flex justify-content-between align-items-center">
-                    <button class="btn btn-outline-danger btn-sm" disabled={selectedAssets.length === 0}>
-                        刪除所選 ({selectedAssets.length})
-                    </button>
+                    {#if currentUser?.role?.includes('admin')}
+                        <button class="btn btn-outline-danger btn-sm" disabled={selectedAssets.length === 0}>
+                            刪除所選 ({selectedAssets.length})
+                        </button>
+                    {/if}
 
                     <nav aria-label="分頁">
                         <ul class="pagination pagination-sm mb-0">
@@ -417,6 +474,27 @@
                     </nav>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Borrow Modal -->
+<div class="modal fade" id="borrowModal" tabindex="-1" aria-labelledby="borrowModalLabel" aria-hidden="true" bind:this={borrowModalElement}>
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="borrowModalLabel">
+                    <i class="mdi mdi-hand-heart me-2"></i>資產借用登記
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            {#if selectedAssetForBorrow}
+                <BorrowForm
+                    asset={selectedAssetForBorrow}
+                    onsuccess={handleBorrowSuccess}
+                    oncancel={() => borrowModalInstance?.hide()}
+                />
+            {/if}
         </div>
     </div>
 </div>

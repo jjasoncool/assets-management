@@ -43,6 +43,7 @@ export interface Asset {
   availability_score?: number;
   total_risk_score?: number;
   status: 'active' | 'inactive' | 'maintenance' | 'retired' | 'lost' | 'stolen' | 'borrowed';
+  requires_approval?: boolean; // 預留欄位，若資料庫無此欄位則為 undefined
   notes?: string;
   created: string;
   updated: string;

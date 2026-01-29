@@ -1,23 +1,27 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
     import { pb } from '$lib/pocketbase';
     import { Swal } from '$lib/stores';
     import { createAssetWithIdGeneration } from '$lib/services/assetService';
+    import BorrowForm from './BorrowForm.svelte';
+    import { logger } from '$lib/utils/logger';
+    import { browser } from '$app/environment';
 
     // Props
-    export let mode: 'create' | 'edit' = 'create';
-    export let assetData: any = null;
-    export let onSubmit: (data: any) => Promise<void>;
-    export let onCancel: () => void;
+    let { mode, assetData = undefined, onSubmit, onCancel } = $props();
 
     // 表單狀態
-    let loading = false;
-    let error: string | null = null;
-    let success: string | null = null;
+    let loading = $state(false);
+    let error = $state<string | null>(null);
+    let success = $state<string | null>(null);
+
+    // Modal state
+    let borrowModalElement = $state<HTMLElement>();
+    let borrowModalInstance: any | null = $state(null);
+    let modalImageUrl = $state<string | null>(null);
 
     // 表單數據
-    let formData = {
+    let formData = $state({
         name: '',
         brand: '',
         model: '',
@@ -34,11 +38,11 @@
         availability_score: undefined as number | undefined,
         status: 'active',
         notes: ''
-    };
+    });
 
     // 選項數據
-    let categories: any[] = [];
-    let users: any[] = [];
+    let categories = $state<any[]>([]);
+    let users = $state<any[]>([]);
 
     // 狀態選項
     const statusOptions = [
@@ -52,33 +56,78 @@
     ];
 
     // 圖片上傳
-    let imageFiles: File[] = [];
-    let imagePreviews: string[] = [];
-    let existingImages: string[] = [];
+    let imageFiles = $state<File[]>([]);
+    let imagePreviews = $state<string[]>([]);
+    let existingImages = $state<string[]>([]);
 
     // 初始化
-    onMount(async () => {
-        try {
-            // 獲取類別列表
-            const categoryResult = await pb.collection('asset_categories').getList(1, 50, {
-                sort: 'name'
+    $effect(() => {
+        if (browser) {
+            import('bootstrap').then(({ Modal }) => {
+                if (borrowModalElement) {
+                    borrowModalInstance = new Modal(borrowModalElement);
+                }
             });
-            categories = categoryResult.items;
+        }
 
-            // 獲取用戶列表
-            const userResult = await pb.collection('users').getList(1, 100, {
-                sort: 'name'
-            });
-            users = userResult.items;
+        async function init() {
+            try {
+                // 獲取類別列表
+                const categoryResult = await pb.collection('asset_categories').getList(1, 50, {
+                    sort: 'name'
+                });
+                categories = categoryResult.items;
 
-            // 如果是編輯模式，初始化表單數據
-            if (mode === 'edit' && assetData) {
-                await initializeEditForm();
+                // 獲取用戶列表
+                const userResult = await pb.collection('users').getList(1, 100, {
+                    sort: 'name'
+                });
+                users = userResult.items;
+
+                // 如果是編輯模式，初始化表單數據
+                if (mode === 'edit' && assetData) {
+                    await initializeEditForm();
+                }
+            } catch (err) {
+                error = err instanceof Error ? err.message : '載入選項失敗';
             }
-        } catch (err) {
-            error = err instanceof Error ? err.message : '載入選項失敗';
+        }
+        init();
+
+        // Cleanup
+        return () => {
+            borrowModalInstance?.dispose();
+            if (browser) {
+                const backdrop = document.querySelector('.modal-backdrop');
+                if (backdrop) backdrop.remove();
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            }
         }
     });
+
+    // Modal handlers
+    function showBorrowModal() {
+        borrowModalInstance?.show();
+    }
+
+    function handleBorrowSuccess() {
+        borrowModalInstance?.hide();
+        $Swal.fire({
+            title: '成功',
+            text: '資產借用申請成功！',
+            icon: 'success',
+            timer: 2000,
+            showConfirmButton: false
+        });
+        // Update the status locally to reflect the change
+        formData.status = 'borrowed';
+        // Also update the original assetData so the change persists if the form is not reloaded
+        if(assetData) {
+            assetData.status = 'borrowed';
+        }
+    }
 
     // 初始化編輯表單
     async function initializeEditForm() {
@@ -91,101 +140,99 @@
                     formattedPurchaseDate = date.toISOString().split('T')[0];
                 }
             } catch (e) {
-                console.error('日期格式化錯誤:', e);
+                logger.error('日期格式化錯誤:', e);
             }
         }
 
-        formData = {
-            name: assetData.name || '',
-            brand: assetData.brand || '',
-            model: assetData.model || '',
-            serial_number: assetData.serial_number || '',
-            purchase_date: formattedPurchaseDate,
-            purchase_price: assetData.purchase_price !== undefined ? assetData.purchase_price : undefined,
-            warranty_years: assetData.warranty_years !== undefined ? assetData.warranty_years : undefined,
-            location: assetData.location || '',
-            department: assetData.department || '',
-            category: assetData.category?.id || assetData.category || '',
-            assigned_to: assetData.assigned_to?.id || assetData.assigned_to || '',
-            confidentiality_score: assetData.confidentiality_score !== undefined ? assetData.confidentiality_score : undefined,
-            integrity_score: assetData.integrity_score !== undefined ? assetData.integrity_score : undefined,
-            availability_score: assetData.availability_score !== undefined ? assetData.availability_score : undefined,
-            status: assetData.status || 'active',
-            notes: assetData.notes || ''
-        };
+        formData.name = assetData.name || '';
+        formData.brand = assetData.brand || '';
+        formData.model = assetData.model || '';
+        formData.serial_number = assetData.serial_number || '';
+        formData.purchase_date = formattedPurchaseDate;
+        formData.purchase_price = assetData.purchase_price !== undefined ? assetData.purchase_price : undefined;
+        formData.warranty_years = assetData.warranty_years !== undefined ? assetData.warranty_years : undefined;
+        formData.location = assetData.location || '';
+        formData.department = assetData.department || '';
+        formData.category = assetData.category?.id || assetData.category || '';
+        formData.assigned_to = assetData.assigned_to?.id || assetData.assigned_to || '';
+        formData.confidentiality_score = assetData.confidentiality_score !== undefined ? assetData.confidentiality_score : undefined;
+        formData.integrity_score = assetData.integrity_score !== undefined ? assetData.integrity_score : undefined;
+        formData.availability_score = assetData.availability_score !== undefined ? assetData.availability_score : undefined;
+        formData.status = assetData.status || 'active';
+        formData.notes = assetData.notes || '';
 
-    // 初始化現有圖片 - 確保圖片 URL 是完整的
-    if (assetData.images && Array.isArray(assetData.images)) {
-        try {
-            // 獲取文件訪問令牌（用於受保護的文件）
-            const fileToken = await pb.files.getToken();
+        // 初始化現有圖片 - 確保圖片 URL 是完整的
+        if (assetData.images && Array.isArray(assetData.images)) {
+            try {
+                // 獲取文件訪問令牌（用於受保護的文件）
+                const fileToken = await pb.files.getToken();
 
-            existingImages = assetData.images.map((img: string) => {
-                // 如果圖片 URL 是相對路徑，轉換為完整 URL
-                if (img && !img.startsWith('http') && !img.startsWith('https')) {
-                    try {
-                        // 獲取 PocketBase 的基礎 URL
-                        const pbBaseUrl = pb.baseUrl;
-                        // PocketBase 圖片 URL 格式：/api/files/collectionId/recordId/filename
-                        // 如果圖片路徑已經包含 collectionId 和 recordId，直接使用
-                        if (img.includes('/')) {
-                            // 如果路徑不以 / 开頭，添加 /
-                            const imagePath = img.startsWith('/') ? img : `/${img}`;
-                            // 使用 PocketBase 的縮圖功能（200x200）來減少流量
-                            // 由於 images 字段是受保護的，需要使用文件令牌
-                            return `${pbBaseUrl}/api/files${imagePath}?token=${fileToken}&thumb=200x200`;
-                        } else {
-                            // 如果只有文件名，需要構建完整路徑
-                            // 使用 assets collectionId 和 recordId
-                            const collectionId = 'pbc_1321337024'; // assets collection ID
-                            const recordId = assetData.id || '';
-                            if (collectionId && recordId) {
+                existingImages = assetData.images.map((img: string) => {
+                    // 如果圖片 URL 是相對路徑，轉換為完整 URL
+                    if (img && !img.startsWith('http') && !img.startsWith('https')) {
+                        try {
+                            // 獲取 PocketBase 的基礎 URL
+                            const pbBaseUrl = pb.baseUrl;
+                            // PocketBase 圖片 URL 格式：/api/files/collectionId/recordId/filename
+                            // 如果圖片路徑已經包含 collectionId 和 recordId，直接使用
+                            if (img.includes('/')) {
+                                // 如果路徑不以 / 开頭，添加 /
+                                const imagePath = img.startsWith('/') ? img : `/${img}`;
                                 // 使用 PocketBase 的縮圖功能（200x200）來減少流量
                                 // 由於 images 字段是受保護的，需要使用文件令牌
-                                return `${pbBaseUrl}/api/files/${collectionId}/${recordId}/${img}?token=${fileToken}&thumb=200x200`;
+                                return `${pbBaseUrl}/api/files${imagePath}?token=${fileToken}&thumb=200x200`;
                             } else {
-                                console.warn('無法構建圖片 URL，缺少 collectionId 或 recordId');
-                                return '';
+                                // 如果只有文件名，需要構建完整路徑
+                                // 使用 assets collectionId 和 recordId
+                                const collectionId = 'pbc_1321337024'; // assets collection ID
+                                const recordId = assetData.id || '';
+                                if (collectionId && recordId) {
+                                    // 使用 PocketBase 的縮圖功能（200x200）來減少流量
+                                    // 由於 images 字段是受保護的，需要使用文件令牌
+                                    return `${pbBaseUrl}/api/files/${collectionId}/${recordId}/${img}?token=${fileToken}&thumb=200x200`;
+                                } else {
+                                    logger.warn('無法構建圖片 URL，缺少 collectionId 或 recordId');
+                                    return '';
+                                }
                             }
+                        } catch (e) {
+                            logger.error('構建圖片 URL 時發生錯誤:', e);
+                            return '';
                         }
-                    } catch (e) {
-                        console.error('構建圖片 URL 時發生錯誤:', e);
-                        return '';
                     }
-                }
-                return img;
-            }).filter((img: string) => img && img.trim() !== '');
-        } catch (tokenError) {
-            console.error('獲取文件訪問令牌失敗:', tokenError);
-            // 如果無法獲取令牌，回退到使用 auth token
-            existingImages = assetData.images.map((img: string) => {
-                if (img && !img.startsWith('http') && !img.startsWith('https')) {
-                    try {
-                        const pbBaseUrl = pb.baseUrl;
-                        if (img.includes('/')) {
-                            const imagePath = img.startsWith('/') ? img : `/${img}`;
-                            // 使用 PocketBase 的縮圖功能（200x200）來減少流量
-                            return `${pbBaseUrl}/api/files${imagePath}?token=${pb.authStore.token}&thumb=200x200`;
-                        } else {
-                            const collectionId = 'pbc_1321337024';
-                            const recordId = assetData.id || '';
-                            if (collectionId && recordId) {
+                    return img;
+                }).filter((img: string) => img && img.trim() !== '');
+            } catch (tokenError) {
+                logger.error('獲取文件訪問令牌失敗:', tokenError);
+                // 如果無法獲取令牌，回退到使用 auth token
+                existingImages = assetData.images.map((img: string) => {
+                    if (img && !img.startsWith('http') && !img.startsWith('https')) {
+                        try {
+                            const pbBaseUrl = pb.baseUrl;
+                            if (img.includes('/')) {
+                                const imagePath = img.startsWith('/') ? img : `/${img}`;
                                 // 使用 PocketBase 的縮圖功能（200x200）來減少流量
-                                return `${pbBaseUrl}/api/files/${collectionId}/${recordId}/${img}?token=${pb.authStore.token}&thumb=200x200`;
+                                return `${pbBaseUrl}/api/files${imagePath}?token=${pb.authStore.token}&thumb=200x200`;
                             } else {
-                                console.warn('無法構建圖片 URL，缺少 collectionId 或 recordId');
-                                return '';
+                                const collectionId = 'pbc_1321337024';
+                                const recordId = assetData.id || '';
+                                if (collectionId && recordId) {
+                                    // 使用 PocketBase 的縮圖功能（200x200）來減少流量
+                                    return `${pbBaseUrl}/api/files/${collectionId}/${recordId}/${img}?token=${pb.authStore.token}&thumb=200x200`;
+                                } else {
+                                    logger.warn('無法構建圖片 URL，缺少 collectionId 或 recordId');
+                                    return '';
+                                }
                             }
+                        } catch (e) {
+                            logger.error('構建圖片 URL 時發生錯誤:', e);
+                            return '';
                         }
-                    } catch (e) {
-                        console.error('構建圖片 URL 時發生錯誤:', e);
-                        return '';
                     }
-                }
-                return img;
-            }).filter((img: string) => img && img.trim() !== '');
+                    return img;
+                }).filter((img: string) => img && img.trim() !== '');
+            }
         }
-    }
     }
 
     // 處理圖片上傳
@@ -233,9 +280,6 @@
         existingImages = existingImages.filter((_, i) => i !== index);
     }
 
-    // 圖片瀏覽模態框狀態
-    let modalImageUrl: string | null = null;
-
     // 開啟圖片瀏覽模態框
     function openImageModal(imageUrl: string) {
         // 如果是縮圖 URL，轉換回原始圖片 URL
@@ -246,60 +290,70 @@
         modalImageUrl = originalUrl;
     }
 
-    // 清理 modal backdrop
-    import { onDestroy } from 'svelte';
-
-    onDestroy(() => {
-        // 確保組件銷毀時，如果 Modal 還開著，要把背景清掉
-        if (typeof document !== 'undefined') {
-            const backdrop = document.querySelector('.modal-backdrop');
-            if (backdrop) backdrop.remove();
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
-            document.body.style.paddingRight = '';
-        }
-    });
-
     // 響應式風險分數計算
-    $: totalRiskScore = () => {
-        const c = formData.confidentiality_score || 0;
-        const i = formData.integrity_score || 0;
-        const a = formData.availability_score || 0;
-        return Math.round(c + i + a);
-    };
+    const totalRiskScore = $derived(Math.round((formData.confidentiality_score || 0) + (formData.integrity_score || 0) + (formData.availability_score || 0)));
 
     // 響應式進度條寬度計算
-    $: progressWidth = () => {
-        const score = totalRiskScore();
-        return Math.round((score / 21) * 100);
-    };
+    const progressWidth = $derived(Math.round((totalRiskScore / 21) * 100));
 
     // 響應式進度條顏色計算
-    $: progressBarClass = () => {
-        const score = totalRiskScore();
-        if (score <= 7) {
-            return 'bg-primary'; // 藍色
-        } else if (score <= 14) {
-            return 'bg-warning'; // 黃色
-        } else {
-            return 'bg-danger'; // 紅色
-        }
-    };
+    const progressBarClass = $derived(totalRiskScore <= 7 ? 'bg-primary' : totalRiskScore <= 14 ? 'bg-warning' : 'bg-danger');
 
     // 處理分數輸入，確保只能輸入 0-7 的數字
     function handleScoreInput(event: Event, field: 'confidentiality_score' | 'integrity_score' | 'availability_score') {
         const input = event.target as HTMLInputElement;
-        let value = parseInt(input.value) || 0;
+        let value = handleIntegerInput(event); // Use the generic handler
 
-        // 限制範圍在 0-7 之間
-        if (value < 0) value = 0;
-        if (value > 7) value = 7;
+        if (value !== undefined) {
+            // Apply clamping logic
+            const clampedValue = Math.max(0, Math.min(value, 7));
+            if (clampedValue !== value) {
+                value = clampedValue;
+                input.value = value.toString(); // Update input if clamped
+            }
+        }
 
-        // 更新 formData
         formData[field] = value;
+    }
 
-        // 更新 input 值
-        input.value = value.toString();
+    // 處理價格輸入格式化
+    function formatPrice(value: number | undefined | null): string {
+        if (value === undefined || value === null) return '';
+        return value.toLocaleString('en-US');
+    }
+
+    /**
+     * 通用的整數輸入處理器。
+     * 過濾輸入只允許數字，並更新輸入框的值。
+     * @param e - 輸入事件
+     * @returns - 解析後的整數或 undefined
+     */
+    function handleIntegerInput(e: Event): number | undefined {
+        const input = e.currentTarget as HTMLInputElement;
+        const value = input.value;
+        const sanitized = value.replace(/[^\d]/g, '');
+
+        if (value !== sanitized) {
+            const start = input.selectionStart || 0;
+            const diff = value.length - sanitized.length;
+            input.value = sanitized;
+            input.selectionStart = start - diff;
+            input.selectionEnd = start - diff;
+        }
+
+        if (sanitized === '') {
+            return undefined;
+        }
+        return parseInt(sanitized, 10);
+    }
+
+    function handlePriceInput(e: Event) {
+        formData.purchase_price = handleIntegerInput(e);
+    }
+
+    function formatPriceOnBlur(e: Event) {
+        const input = e.currentTarget as HTMLInputElement;
+        input.value = formatPrice(formData.purchase_price);
     }
 
     // 驗證表單
@@ -370,7 +424,7 @@
                 confidentiality_score: formData.confidentiality_score,
                 integrity_score: formData.integrity_score,
                 availability_score: formData.availability_score,
-                total_risk_score: totalRiskScore(),
+                total_risk_score: totalRiskScore,
                 status: formData.status,
                 notes: formData.notes.trim()
             };
@@ -394,72 +448,72 @@
             // PocketBase 會自動將這些圖片「附加」到現有圖片列表後，而不是覆蓋
             if (imageFiles.length > 0) {
                 imageFiles.forEach(file => {
-                    console.log(`加入新圖片: ${file.name}`);
+                    logger.log(`加入新圖片: ${file.name}`);
                     formDataObj.append('images', file);
                 });
             }
 
-    // 3. 處理要刪除的舊圖片 (只在編輯模式)
-    if (mode === 'edit' && assetData?.images && Array.isArray(assetData.images)) {
-        const originalImages = assetData.images;
+            // 3. 處理要刪除的舊圖片 (只在編輯模式)
+            if (mode === 'edit' && assetData?.images && Array.isArray(assetData.images)) {
+                const originalImages = assetData.images;
 
-        // 除錯：印出原始圖片數據和現有圖片 URL
-        console.log('=== 圖片處理除錯資訊 ===');
-        console.log('原始圖片數據 (assetData.images):', originalImages);
-        console.log('現有圖片 URL (existingImages):', existingImages);
+                // 除錯：印出原始圖片數據和現有圖片 URL
+                logger.log('=== 圖片處理除錯資訊 ===');
+                logger.log('原始圖片數據 (assetData.images):', originalImages);
+                logger.log('現有圖片 URL (existingImages):', existingImages);
 
-        // 修正比對邏輯：
-        // 檢查原始檔名 (filename) 是否存在於現有的 URL (existingImages) 中
-        const deletedImages = originalImages.filter((originalItem: string) => {
-            // 提取原始項目的純檔案名稱（去除路徑部分）
-            const parts = originalItem ? originalItem.split('/') : [];
-            const lastPart = parts.length > 0 ? parts[parts.length - 1] : '';
-            const filename = lastPart ? lastPart.split('?')[0] : '';
+                // 修正比對邏輯：
+                // 檢查原始檔名 (filename) 是否存在於現有的 URL (existingImages) 中
+                const deletedImages = originalImages.filter((originalItem: string) => {
+                    // 提取原始項目的純檔案名稱（去除路徑部分）
+                    const parts = originalItem ? originalItem.split('/') : [];
+                    const lastPart = parts.length > 0 ? parts[parts.length - 1] : '';
+                    const filename = lastPart ? lastPart.split('?')[0] : '';
 
-            // 除錯：印出每個檔案的比對結果
-            console.log(`檢查檔案: ${originalItem} -> 提取檔名: ${filename}`);
-            const isDeleted = filename && !existingImages.some(url => url.includes(filename));
-            console.log(`  是否要刪除: ${isDeleted} (${existingImages.some(url => url.includes(filename)) ? '找到匹配' : '未找到匹配'})`);
+                    // 除錯：印出每個檔案的比對結果
+                    logger.log(`檢查檔案: ${originalItem} -> 提取檔名: ${filename}`);
+                    const isDeleted = filename && !existingImages.some(url => url.includes(filename));
+                    logger.log(`  是否要刪除: ${isDeleted} (${existingImages.some(url => url.includes(filename)) ? '找到匹配' : '未找到匹配'})`);
 
-            return isDeleted;
-        });
+                    return isDeleted;
+                });
 
-        // 除錯：印出要刪除的圖片列表
-        console.log('要刪除的圖片:', deletedImages);
+                // 除錯：印出要刪除的圖片列表
+                logger.log('要刪除的圖片:', deletedImages);
 
-        // 在 FormData 中加入 `images-` 欄位，PocketBase 收到後會刪除指定的檔案
-        // 使用純檔案名稱（不包含路徑）
-        deletedImages.forEach((originalItem: string) => {
-            const parts = originalItem ? originalItem.split('/') : [];
-            const lastPart = parts.length > 0 ? parts[parts.length - 1] : '';
-            const filename = lastPart ? lastPart.split('?')[0] : '';
-            if (filename) {
-                console.log(`加入刪除請求: ${filename}`);
-                formDataObj.append('images-', filename);
+                // 在 FormData 中加入 `images-` 欄位，PocketBase 收到後會刪除指定的檔案
+                // 使用純檔案名稱（不包含路徑）
+                deletedImages.forEach((originalItem: string) => {
+                    const parts = originalItem ? originalItem.split('/') : [];
+                    const lastPart = parts.length > 0 ? parts[parts.length - 1] : '';
+                    const filename = lastPart ? lastPart.split('?')[0] : '';
+                    if (filename) {
+                        logger.log(`加入刪除請求: ${filename}`);
+                        formDataObj.append('images-', filename);
+                    }
+                });
+
+                // 除錯：顯示最終的 FormData 內容
+                logger.log('=== FormData 內容 ===');
+                for (let [key, value] of formDataObj.entries()) {
+                    logger.log(`${key}:`, value);
+                }
+
+                // 安全機制：如果沒有要刪除的圖片，且有現有圖片，則明確保留現有圖片
+                // 這是為了防止 PocketBase 在某些版本中可能清除現有圖片的問題
+                if (deletedImages.length === 0 && existingImages.length > 0) {
+                    logger.log('安全機制：明確保留現有圖片');
+                    // 使用 images+ 來明確附加空陣列，表示保留現有圖片
+                    formDataObj.append('images+', '');
+                }
+            } else if (mode === 'edit') {
+                // 如果沒有原始圖片數據，但有現有圖片，也需要處理
+                logger.log('編輯模式但沒有原始圖片數據，檢查是否有現有圖片需要保留');
+                if (existingImages.length > 0) {
+                    logger.log('安全機制：明確保留現有圖片（無原始數據情況）');
+                    formDataObj.append('images+', '');
+                }
             }
-        });
-
-        // 除錯：顯示最終的 FormData 內容
-        console.log('=== FormData 內容 ===');
-        for (let [key, value] of formDataObj.entries()) {
-            console.log(`${key}:`, value);
-        }
-
-        // 安全機制：如果沒有要刪除的圖片，且有現有圖片，則明確保留現有圖片
-        // 這是為了防止 PocketBase 在某些版本中可能清除現有圖片的問題
-        if (deletedImages.length === 0 && existingImages.length > 0) {
-            console.log('安全機制：明確保留現有圖片');
-            // 使用 images+ 來明確附加空陣列，表示保留現有圖片
-            formDataObj.append('images+', '');
-        }
-    } else if (mode === 'edit') {
-        // 如果沒有原始圖片數據，但有現有圖片，也需要處理
-        console.log('編輯模式但沒有原始圖片數據，檢查是否有現有圖片需要保留');
-        if (existingImages.length > 0) {
-            console.log('安全機制：明確保留現有圖片（無原始數據情況）');
-            formDataObj.append('images+', '');
-        }
-    }
 
             // 4. 發送請求 (單次請求完成更新與刪除)
             let result;
@@ -487,7 +541,7 @@
             }
 
         } catch (err) {
-            console.error('提交錯誤:', err); // 建議加入 console log 以便除錯
+            logger.error('提交錯誤:', err); // 建議加入 console log 以便除錯
             error = err instanceof Error ?
                 err.message : mode === 'create' ? '新增資產失敗' : '更新資產失敗';
         } finally {
@@ -501,7 +555,7 @@
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
             <i class="mdi mdi-alert-circle me-2"></i>
             {error}
-            <button type="button" class="btn-close" on:click={() => error = null}></button>
+            <button type="button" class="btn-close" onclick={() => error = null} aria-label="Close"></button>
         </div>
     {/if}
 
@@ -509,11 +563,11 @@
         <div class="alert alert-success alert-dismissible fade show" role="alert">
             <i class="mdi mdi-check-circle me-2"></i>
             {success}
-            <button type="button" class="btn-close" on:click={() => success = null}></button>
+            <button type="button" class="btn-close" onclick={() => success = null} aria-label="Close"></button>
         </div>
     {/if}
 
-    <form on:submit|preventDefault={handleSubmit}>
+    <form onsubmit={handleSubmit}>
         <!-- 基本資訊 -->
         <div class="row g-3 mb-4">
             <div class="col-md-6">
@@ -587,13 +641,14 @@
                 <div class="input-group">
                     <span class="input-group-text">NT$</span>
                     <input
-                        type="number"
+                        type="text"
+                        inputmode="numeric"
                         id="purchase_price"
                         class="form-control shadow-none"
-                        bind:value={formData.purchase_price}
+                        value={formatPrice(formData.purchase_price)}
+                        oninput={handlePriceInput}
+                        onblur={formatPriceOnBlur}
                         placeholder="0"
-                        min="0"
-                        step="0.01"
                     />
                 </div>
             </div>
@@ -603,10 +658,13 @@
                     type="number"
                     id="warranty_years"
                     class="form-control shadow-none"
-                    bind:value={formData.warranty_years}
+                    value={formData.warranty_years ?? ''}
+                    oninput={(e) => {
+                        formData.warranty_years = handleIntegerInput(e);
+                    }}
                     placeholder="0"
                     min="0"
-                    step="0.1"
+                    step="1"
                 />
             </div>
         </div>
@@ -678,12 +736,12 @@
                     type="number"
                     id="confidentiality_score"
                     class="form-control shadow-none"
-                    bind:value={formData.confidentiality_score}
+                    value={formData.confidentiality_score ?? ''}
                     placeholder="0-7"
                     min="0"
                     max="7"
                     step="1"
-                    on:input={(e) => handleScoreInput(e, 'confidentiality_score')}
+                    oninput={(e) => handleScoreInput(e, 'confidentiality_score')}
                 />
             </div>
             <div class="col-md-4">
@@ -692,12 +750,12 @@
                     type="number"
                     id="integrity_score"
                     class="form-control shadow-none"
-                    bind:value={formData.integrity_score}
+                    value={formData.integrity_score ?? ''}
                     placeholder="0-7"
                     min="0"
                     max="7"
                     step="1"
-                    on:input={(e) => handleScoreInput(e, 'integrity_score')}
+                    oninput={(e) => handleScoreInput(e, 'integrity_score')}
                 />
             </div>
             <div class="col-md-4">
@@ -706,23 +764,23 @@
                     type="number"
                     id="availability_score"
                     class="form-control shadow-none"
-                    bind:value={formData.availability_score}
+                    value={formData.availability_score ?? ''}
                     placeholder="0-7"
                     min="0"
                     max="7"
                     step="1"
-                    on:input={(e) => handleScoreInput(e, 'availability_score')}
+                    oninput={(e) => handleScoreInput(e, 'availability_score')}
                 />
             </div>
             <div class="col-md-12">
                     <div class="alert alert-light small">
-                        風險總分：{totalRiskScore()} / 21
+                        風險總分：{totalRiskScore} / 21
                         <div class="progress mt-2" style="height: 8px">
                             <div
-                                class="progress-bar {progressBarClass()}"
-                                style="width: {progressWidth()}%"
+                                class="progress-bar {progressBarClass}"
+                                style="width: {progressWidth}%"
                                 role="progressbar"
-                                aria-valuenow={progressWidth()}
+                                aria-valuenow={progressWidth}
                                 aria-valuemin="0"
                                 aria-valuemax="100"
                             ></div>
@@ -742,7 +800,7 @@
                         class="form-control shadow-none"
                         accept="image/*"
                         multiple
-                        on:change={handleImageUpload}
+                        onchange={handleImageUpload}
                     />
                 </div>
                 <div class="form-text">
@@ -764,7 +822,7 @@
                                     aria-label="查看現有圖片"
                                     data-bs-toggle="modal"
                                     data-bs-target="#imagePreviewModal"
-                                    on:click={() => openImageModal(image)}
+                                    onclick={() => openImageModal(image)}
                                 >
                                     <img
                                         src={image}
@@ -777,7 +835,7 @@
                                     type="button"
                                     class="btn btn-danger btn-sm position-absolute top-0 end-0"
                                     style="transform: translate(25%, -25%);"
-                                    on:click|stopPropagation={() => removeExistingImage(index)}
+                                    onclick={(e) => { e.stopPropagation(); removeExistingImage(index); }}
                                     aria-label="刪除現有圖片"
                                     title="刪除現有圖片"
                                 >
@@ -800,7 +858,7 @@
                                     aria-label="查看新上傳的圖片"
                                     data-bs-toggle="modal"
                                     data-bs-target="#imagePreviewModal"
-                                    on:click={() => openImageModal(preview)}
+                                    onclick={() => openImageModal(preview)}
                                 >
                                     <img
                                         src={preview}
@@ -813,7 +871,7 @@
                                     type="button"
                                     class="btn btn-danger btn-sm position-absolute top-0 end-0"
                                     style="transform: translate(25%, -25%);"
-                                    on:click|stopPropagation={() => removeNewImage(index)}
+                                    onclick={(e) => { e.stopPropagation(); removeNewImage(index); }}
                                     aria-label="刪除新上傳的圖片"
                                     title="刪除新上傳的圖片"
                                 >
@@ -845,14 +903,22 @@
         <div class="row">
             <div class="col-12">
                 <div class="d-flex justify-content-between">
-                    <button
-                        type="button"
-                        class="btn btn-outline-secondary"
-                        on:click={onCancel}
-                    >
-                        <i class="mdi mdi-arrow-left me-2"></i>
-                        返回列表
-                    </button>
+                    <div>
+                        <button
+                            type="button"
+                            class="btn btn-outline-secondary"
+                            onclick={onCancel}
+                        >
+                            <i class="mdi mdi-arrow-left me-2"></i>
+                            返回列表
+                        </button>
+                        {#if mode === 'edit' && formData.status === 'active'}
+                            <button type="button" class="btn btn-info ms-2" onclick={showBorrowModal}>
+                                <i class="mdi mdi-hand-heart me-2"></i>
+                                借用此資產
+                            </button>
+                        {/if}
+                    </div>
 
                     <button
                         type="submit"
@@ -899,6 +965,28 @@
                     {/if}
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Borrow Modal -->
+<div class="modal fade" id="borrowModal" tabindex="-1" aria-labelledby="borrowModalLabel" aria-hidden="true" bind:this={borrowModalElement}>
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="borrowModalLabel">
+                    <i class="mdi mdi-hand-heart me-2"></i>資產借用登記
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            {#if assetData}
+                <BorrowForm
+                    asset={assetData}
+                    onsuccess={handleBorrowSuccess}
+                    oncancel={() => borrowModalInstance?.hide()}
+                />
+            {/if}
         </div>
     </div>
 </div>

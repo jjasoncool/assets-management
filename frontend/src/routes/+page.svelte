@@ -2,13 +2,13 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { logout, isAuthenticated, getCurrentUser } from '$lib/services/userService';
+	import { getBorrowRecords, type BorrowRecord } from '$lib/services/borrowService';
 	import Navbar from '$lib/components/Navbar.svelte';
 	import Footer from '$lib/components/Footer.svelte';
 	import { Calendar } from '@fullcalendar/core';
 	import dayGridPlugin from '@fullcalendar/daygrid';
 	import timeGridPlugin from '@fullcalendar/timegrid';
 	import interactionPlugin from '@fullcalendar/interaction';
-	import { getBorrowRecords, type BorrowRecord } from '$lib/services/assetService';
 
 	// currentUser 由 layout 提供
 	export let data: any;

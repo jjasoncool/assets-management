@@ -22,7 +22,7 @@ export let currentUser: any;
                     <a class="nav-link active" aria-current="page" href="/"><i class="mdi mdi-view-dashboard me-1"></i>Dashboard</a>
                 </li>
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" id="assetsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <a class="nav-link dropdown-toggle" href="#!" id="assetsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="mdi mdi-package-variant-closed me-1"></i>資產管理
                     </a>
                         <ul class="dropdown-menu" aria-labelledby="assetsDropdown">
@@ -33,20 +33,31 @@ export let currentUser: any;
                         </ul>
                 </li>
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" id="borrowDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <a class="nav-link dropdown-toggle" href="#!" id="borrowDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="mdi mdi-hand-heart me-1"></i>借用管理
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="borrowDropdown">
-                        <li><a class="dropdown-item" href="/borrow/requests"><i class="mdi mdi-clipboard-plus me-2"></i>借用請求</a></li>
-                        <li><a class="dropdown-item" href="/borrow/my"><i class="mdi mdi-account-clock me-2"></i>我的借用</a></li>
+                        <li><a class="dropdown-item" href="/borrow/list"><i class="mdi mdi-account-clock me-2"></i>已借用清單</a></li>
                         <li><a class="dropdown-item" href="/return"><i class="mdi mdi-undo-variant me-2"></i>歸還資產</a></li>
+                    </ul>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#!" id="maintenanceDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="mdi mdi-wrench me-1"></i>資產維護
+                    </a>
+                    <ul class="dropdown-menu" aria-labelledby="maintenanceDropdown">
+                        <li><a class="dropdown-item" href="/maintenance"><i class="mdi mdi-history me-2"></i>維護紀錄總覽</a></li>
+                        <li><a class="dropdown-item" href="/maintenance/create"><i class="mdi mdi-plus-box-outline me-2"></i>填寫維護單</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="/assets?status=maintenance"><i class="mdi mdi-progress-wrench me-2"></i>待處理維護</a></li>
+                        <li><a class="dropdown-item" href="/maintenance/stats"><i class="mdi mdi-finance me-2"></i>維護成本分析</a></li>
                     </ul>
                 </li>
             </ul>
 
             <ul class="navbar-nav">
             <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <a class="nav-link dropdown-toggle d-flex align-items-center" href="#!" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                     {#if currentUser?.avatar && currentUser.avatar !== ''}
                         <img src="{pb.files.getURL(currentUser, currentUser.avatar)}" alt="Avatar" class="rounded-circle me-2" style="width: 24px; height: 24px; object-fit: cover;">
                     {:else}
@@ -59,7 +70,7 @@ export let currentUser: any;
                             <i class="mdi mdi-account me-2"></i>Profile
                         </a></li>
                     <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item text-danger" href="/login" on:click={handleLogout}>
+                    <li><a class="dropdown-item text-danger" href="/login" onclick={handleLogout}>
                             <i class="mdi mdi-logout me-2"></i>Logout
                         </a></li>
                 </ul>
