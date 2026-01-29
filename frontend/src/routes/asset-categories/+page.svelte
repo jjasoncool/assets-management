@@ -189,7 +189,7 @@ function editCategory(category: any) {
                     <div class="alert alert-danger alert-dismissible fade show" role="alert">
                         <i class="mdi mdi-alert-circle me-2"></i>
                         {error}
-                        <button type="button" class="btn-close" on:click={() => error = null}></button>
+                        <button type="button" class="btn-close" onclick={() => error = null} aria-label="Close"></button>
                     </div>
                 {/if}
 
@@ -197,7 +197,7 @@ function editCategory(category: any) {
                     <div class="alert alert-success alert-dismissible fade show" role="alert">
                         <i class="mdi mdi-check-circle me-2"></i>
                         {success}
-                        <button type="button" class="btn-close" on:click={() => success = null}></button>
+                        <button type="button" class="btn-close" onclick={() => success = null} aria-label="Close"></button>
                     </div>
                 {/if}
 
@@ -207,7 +207,7 @@ function editCategory(category: any) {
                         <h6 class="mb-0 fw-bold">{isEditing ? '編輯資產類別' : '新增資產類別'}</h6>
                     </div>
                     <div class="card-body">
-                        <form on:submit|preventDefault={handleSubmit}>
+                        <form onsubmit={handleSubmit}>
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <label for="name" class="form-label small fw-bold text-secondary">類別名稱 *</label>
@@ -232,7 +232,7 @@ function editCategory(category: any) {
                                             maxlength="2"
                                             required
                                         />
-                                        <span class="input-group-text">例如：NB、DT</span>
+                                        <span class="input-group-text">例如：NB、PC</span>
                                     </div>
                                 </div>
                                 <div class="col-12">
@@ -251,7 +251,7 @@ function editCategory(category: any) {
                                         <button
                                             type="button"
                                             class="btn btn-outline-secondary me-2"
-                                            on:click={resetForm}
+                                            onclick={resetForm}
                                         >
                                             <i class="mdi mdi-cancel me-2" aria-hidden="true"></i>
                                             取消
@@ -327,7 +327,7 @@ function editCategory(category: any) {
                                                     <button
                                                         type="button"
                                                         class="btn btn-sm btn-outline-primary"
-                                                        on:click={() => editCategory(category)}
+                                                        onclick={() => editCategory(category)}
                                                         aria-label={"編輯類別 " + category.name}
                                                     >
                                                         <i class="mdi mdi-pencil me-1" aria-hidden="true"></i>
@@ -336,7 +336,7 @@ function editCategory(category: any) {
                                                     <button
                                                         type="button"
                                                         class="btn btn-sm btn-outline-danger"
-                                                        on:click={() => deleteCategory(category.id)}
+                                                        onclick={() => deleteCategory(category.id)}
                                                         aria-label={"刪除類別 " + category.name}
                                                     >
                                                         <i class="mdi mdi-delete me-1" aria-hidden="true"></i>

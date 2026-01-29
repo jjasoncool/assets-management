@@ -191,12 +191,17 @@ export async function createAssetWithIdGeneration(
 
             const createdAsset = await pb.collection('assets').create(formDataObj);
 
-            try {
-                await pb.collection('asset_categories').update(categoryId, {
-                    next_sequence: newSequence
-                });
-            } catch (updateError) {
-                logger.warn('更新資產類別序號失敗 (但資產已成功創建):', updateError);
+            // 修改點：只有當新的序號大於目前的序號時，才更新資料庫
+            // 這樣當填補中間缺號時（例如 3 被刪除，重新新增 3），就不會推升 next_sequence（例如 5）
+            const currentCategory = categories.find(c => c.id === categoryId);
+            if (currentCategory && newSequence > currentCategory.next_sequence) {
+                try {
+                    await pb.collection('asset_categories').update(categoryId, {
+                        next_sequence: newSequence
+                    });
+                } catch (updateError) {
+                    logger.warn('更新資產類別序號失敗 (但資產已成功創建):', updateError);
+                }
             }
 
             return createdAsset; // 成功
@@ -251,7 +256,11 @@ export async function calculateNextAssetIdAndSequence(categoryId: string, catego
         }
 
         const assetId = `${category.prefix}-${nextNumber.toString().padStart(3, '0')}`;
-        const newSequence = Math.max(category.next_sequence, nextNumber) + 1;
+
+        // 修改點：計算邏輯修正
+        // 原本邏輯：Math.max(curr, next) + 1  => 即使 next 小於 curr，也會導致 +1
+        // 修正邏輯：Math.max(curr, next + 1)  => 只有當 next + 1 超越 curr 時，才會改變
+        const newSequence = Math.max(category.next_sequence, nextNumber + 1);
 
         return { assetId, newSequence };
     } catch (error) {
