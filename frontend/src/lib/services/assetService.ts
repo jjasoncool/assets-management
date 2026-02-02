@@ -239,7 +239,7 @@ export async function calculateNextAssetIdAndSequence(categoryId: string, catego
 
         const usedNumbers = new Set<number>();
         existingAssets.items.forEach(asset => {
-            const match = asset.asset_id.match(/^([A-Z]{2})-(\d{3})$/);
+            const match = asset.asset_id.match(/^([A-Z0-9]{2})-(\d{3})$/);
             if (match) {
                 usedNumbers.add(parseInt(match[2], 10));
             }

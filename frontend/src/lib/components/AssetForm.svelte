@@ -439,7 +439,7 @@
 
             // 1. 加入一般文字欄位
             Object.entries(submitData).forEach(([key, value]) => {
-                if (value !== undefined && value !== null && value !== '') {
+                if (value !== undefined && value !== null) {
                     formDataObj.append(key, String(value));
                 }
             });
@@ -620,7 +620,7 @@
                     id="serial_number"
                     class="form-control shadow-none"
                     bind:value={formData.serial_number}
-                    placeholder="設備序列號碼"
+                    placeholder="S/N 號碼"
                 />
             </div>
         </div>
