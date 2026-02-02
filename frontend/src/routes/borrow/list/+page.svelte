@@ -12,11 +12,18 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
-	// Initialize viewMode directly from props to prevent race condition from a separate effect
-	let viewMode = $state<'my' | 'all'>(
+	let viewModeManual = $state<'my' | 'all' | null>(null);
+	const defaultViewMode = $derived(
 		data.currentUser?.role?.includes('admin') ? 'all' : 'my'
 	);
-	let filterStatus = $state<'pending' | 'borrowed' | 'overdue' | 'returned' | ''>('');
+	let viewMode = $derived(viewModeManual ?? defaultViewMode);
+
+	$effect(() => {
+		// When user changes, reset the manual viewMode selection
+		data.currentUser;
+		viewModeManual = null;
+	});
+	let filterStatus = $state<'pending' | 'borrowed' | 'overdue' | 'returned' | ''>('borrowed');
 	let page = $state(1);
 	const perPage = 10; // Adjusted for better viewing
 
@@ -93,13 +100,11 @@
 
 	function toggleViewMode() {
 		page = 1; // Reset to first page
-		viewMode = viewMode === 'my' ? 'all' : 'my';
-		fetchRecords();
+		viewModeManual = viewMode === 'my' ? 'all' : 'my';
 	}
 
 	function handleFilterChange() {
 		page = 1; // Reset to first page
-		fetchRecords();
 	}
 
 	function goToPage(newPage: number) {
@@ -198,12 +203,15 @@
 							</thead>
 							<tbody>
 								{#each recordsResult.items as borrow}
-									<tr class:table-warning={borrow.status === 'pending'} class:table-danger={borrow.status === 'overdue'}>
+									<tr
+										class:table-warning={borrow.status === 'pending'}
+										class:table-danger={borrow.status === 'overdue'}
+									>
 										{#if viewMode === 'all' && currentUser?.role?.includes('admin')}
 											<td>{borrow.expand?.user?.name || borrow.expand?.user?.email}</td>
 										{/if}
 										<td>
-											<a href="/assets/{borrow.asset}">{borrow.expand?.asset?.name}</a>
+											<a href={`/assets?search=${borrow.expand?.asset?.asset_id}`}>{borrow.expand?.asset?.name}</a>
 											<small class="d-block text-muted">{borrow.expand?.asset?.asset_id}</small>
 										</td>
 										<td>{new Date(borrow.borrow_date).toLocaleDateString()}</td>

@@ -1,9 +1,7 @@
 <script lang="ts">
     import { goto, replaceState } from '$app/navigation';
     import { page } from '$app/state';
-    import { get } from 'svelte/store';
-    import { getAssets, searchAssets, type Asset } from '$lib/services/assetService';
-    import { logout } from '$lib/services/userService';
+    import { getAssets, searchAssets, type Asset } from '$lib/services/assetService';    import { logout } from '$lib/services/userService';
     import { pb } from '$lib/pocketbase';
     import { bs, Swal } from '$lib/stores';
     import Navbar from '$lib/components/Navbar.svelte';
@@ -33,8 +31,6 @@
     let borrowModalElement: HTMLElement;
     let borrowModalInstance: any | null = $state(null);
     let selectedAssetForBorrow: Asset | null = $state(null);
-    let bsInstance: any = null;
-	bs.subscribe(value => bsInstance = value);
 
     // 狀態選項配置
     const statusOptions = [
@@ -97,21 +93,14 @@
 
     function handleBorrowSuccess() {
         borrowModalInstance?.hide();
-        get(Swal).fire({
+        $Swal.fire({
             title: '成功',
             text: '資產借用申請成功！',
             icon: 'success',
             timer: 2000,
             showConfirmButton: false
         });
-        // Update the status of the borrowed asset in the list
-        if (selectedAssetForBorrow) {
-            const index = assets.findIndex(a => a.id === selectedAssetForBorrow!.id);
-            if (index !== -1) {
-                assets[index].status = 'borrowed'; // Or 'pending' depending on the flow
-                assets = [...assets]; // Trigger reactivity
-            }
-        }
+        loadAssets(currentPage);
     }
 
     function handleBorrowClick(event: MouseEvent, asset: Asset) {
@@ -163,7 +152,7 @@
 
     async function handleDelete(id: string) {
         // 從 store 獲取 Swal 實例
-        const swalInstance = get(Swal);
+        const swalInstance = $Swal;
         const result = await swalInstance.fire({
             title: '確定要刪除此資產？',
             text: "此操作無法復原！",
@@ -260,14 +249,20 @@
 
     $effect(() => {
         // Initialize modal
-        if (borrowModalElement && bsInstance) {
-            borrowModalInstance = new bsInstance.Modal(borrowModalElement);
+        if (borrowModalElement && $bs) {
+            borrowModalInstance = new $bs.Modal(borrowModalElement);
         }
 
         const urlSort = page.url.searchParams.get('sort');
         if (urlSort) {
             sortOrder = urlSort;
         }
+
+        const urlSearch = page.url.searchParams.get('search');
+        if (urlSearch) {
+            searchQuery = urlSearch;
+        }
+
         // 使用 setTimeout 確保 DOM 完全載入後再載入資料，避免自動取消
         setTimeout(() => {
             loadAssets();
