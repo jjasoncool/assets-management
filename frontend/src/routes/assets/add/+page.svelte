@@ -1,27 +1,12 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
-    import { logout } from '$lib/services/userService';
     import Navbar from '$lib/components/Navbar.svelte';
     import AssetForm from '$lib/components/AssetForm.svelte';
 
-    // 由 layout 提供的使用者資料
-    export let data: any;
-    let currentUser = data?.currentUser;
+    // 接收 Server 傳來的資料 (包含 users, categories, currentUser)
+    let { data, form } = $props();
 
-    // 提交成功後的處理
-    async function handleSubmit() {
-        goto('/assets');
-    }
-
-    // 取消處理
-    function handleCancel() {
-        goto('/assets');
-    }
-
-    function handleLogout() {
-        logout();
-        goto('/login');
-    }
+    // 這裡我們直接使用 data 裡的資料
 </script>
 
 <svelte:head>
@@ -30,7 +15,7 @@
 
 <div class="min-vh-100 pb-5">
     <div class="container-fluid px-4">
-        <Navbar {handleLogout} {currentUser} />
+        <Navbar />
 
         <div class="card shadow-sm bg-white bg-opacity-90">
             <div class="card-header bg-white bg-opacity-90 py-3">
@@ -39,8 +24,10 @@
 
             <AssetForm
                 mode="create"
-                onSubmit={handleSubmit}
-                onCancel={handleCancel}
+                form={form}
+                users={data.users}
+                categories={data.categories}
+                onCancel={() => goto('/assets')}
             />
         </div>
     </div>

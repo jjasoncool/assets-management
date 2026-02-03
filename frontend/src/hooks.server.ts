@@ -25,19 +25,18 @@ export const handle: Handle = async ({ event, resolve }) => {
 
   if (tokenValue) {
     try {
-      // 驗證 token 並載入用戶資料
-      // tokenValue 就是 cookie 的值，我們需要重建完整的 cookie 字符串
-      pb.authStore.loadFromCookie(`pb_auth=${tokenValue}`);
+      // tokenValue 現在是純 token 字串，使用 save 方法載入
+      pb.authStore.save(tokenValue, null);
+
+      // 驗證 token 是否有效並刷新用戶資料
+      await pb.collection('users').authRefresh();
+      
       if (isDev) {
-        console.log(`[SERVER] ${url.pathname} - Auth loaded, isValid:`, pb.authStore.isValid);
-      }
-      // 檢查 token 是否有效
-      if (!pb.authStore.isValid) {
-        throw new Error('Invalid token');
+        console.log(`[SERVER] ${url.pathname} - Auth refreshed, isValid:`, pb.authStore.isValid);
       }
     } catch (error) {
       if (isDev) {
-        console.warn(`[SERVER] ${url.pathname} - Invalid token, clearing auth`);
+        console.warn(`[SERVER] ${url.pathname} - Invalid token from cookie, clearing auth`, error);
       }
       // Token 無效，清空 auth store
       pb.authStore.clear();

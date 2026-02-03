@@ -1,76 +1,17 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { dev } from '$app/environment';
-	import { pb } from '$lib/pocketbase';
-	import { userAuth } from '$lib/services/userService';
+	import { enhance } from '$app/forms';
+	import type { ActionData } from './$types';
 
-	let email = '';
-	let password = '';
-	let error = '';
-	let loading = false;
+	let { form } = $props<{ form: ActionData }>();
 
-	// 移除重複的認證檢查，因為 hooks.server.ts 已經處理了
+	let loading = $state(false);
+	// 新增：前端自己的錯誤訊息狀態
+	let clientError = $state('');
 
-	// Email 格式驗證
+	// 保留您原本的驗證邏輯
 	function validateEmail(email: string): boolean {
 		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 		return emailRegex.test(email);
-	}
-
-	async function handleLogin() {
-		// 增強輸入驗證
-		if (!email || !password) {
-			error = '請輸入郵箱和密碼';
-			return;
-		}
-
-		if (!validateEmail(email)) {
-			error = '請輸入有效的郵箱地址';
-			return;
-		}
-
-		if (password.length < 6) {
-			error = '密碼長度至少需要6個字符';
-			return;
-		}
-
-		loading = true;
-		error = '';
-
-		try {
-			await userAuth(email, password);
-
-			// ✅ 解決方案：不使用 httpOnly cookie（無法用 JS 設定）
-			// 改用安全的 sessionStorage + 一般 cookie
-			const authData = pb.authStore.exportToCookie({
-				httpOnly: false, // 客戶端可存取，用於 sessionStorage
-				secure: false, // 開發環境使用 HTTP
-				sameSite: 'Lax', // 允許部分跨站請求
-				path: '/' // 全站有效
-			});
-
-			// 1. 儲存到 sessionStorage（安全，無法被 XSS 竊取）
-			sessionStorage.setItem('pb_auth', authData);
-
-			// 2. 設定 cookie 給服務端（包含完整認證資料）
-			document.cookie = authData;
-
-			// 只在開發環境顯示敏感調試信息
-			if (dev) {
-				console.log('✅ [CLIENT] Auth data stored');
-				console.log('🔍 [CLIENT] Current cookies after login:', document.cookie);
-				console.log('🔍 [CLIENT] SessionStorage has auth:', !!sessionStorage.getItem('pb_auth'));
-			}
-
-			// 直接重定向到首頁
-			window.location.href = '/';
-		} catch (err: any) {
-			// 模糊化錯誤信息，避免洩露具體錯誤
-			error = '登入失敗，請檢查您的登入資訊';
-			console.error('Login error:', err); // 保留詳細錯誤給開發者
-		} finally {
-			loading = false;
-		}
 	}
 </script>
 
@@ -93,7 +34,46 @@
 						</div>
 						<div class="row mt-2">
 							<div class="col-12">
-								<form method="post" on:submit|preventDefault={handleLogin} class="tm-login-form">
+								<form
+									method="POST"
+									action="?/login"
+									class="tm-login-form"
+									use:enhance={({ formData, cancel }) => {
+										// 1. 清除舊錯誤
+										clientError = '';
+
+										// 2. 獲取表單資料
+										const email = formData.get('email') as string;
+										const password = formData.get('password') as string;
+
+										// 3. 執行您原本的前端驗證邏輯
+										if (!email || !password) {
+											clientError = '請輸入郵箱和密碼';
+											cancel(); // 阻止提交到 Server
+											return;
+										}
+
+										if (!validateEmail(email)) {
+											clientError = '請輸入有效的郵箱地址';
+											cancel();
+											return;
+										}
+
+										if (password.length < 6) {
+											clientError = '密碼長度至少需要6個字符';
+											cancel();
+											return;
+										}
+
+										// 4. 通過驗證，設定 Loading
+										loading = true;
+
+										return async ({ update }) => {
+											loading = false;
+											await update();
+										};
+									}}
+								>
 									<div class="input-group">
 										<label for="email" class="col-xl-4 col-lg-4 col-md-4 col-sm-5 col-form-label"
 											>Email</label
@@ -103,7 +83,7 @@
 											type="email"
 											class="form-control validate col-xl-9 col-lg-8 col-md-8 col-sm-7"
 											id="email"
-											bind:value={email}
+											value={form?.email ?? ''}
 											required
 										/>
 									</div>
@@ -118,7 +98,6 @@
 											type="password"
 											class="form-control validate"
 											id="password"
-											bind:value={password}
 											required
 										/>
 									</div>
@@ -135,11 +114,13 @@
 											{/if}
 										</button>
 									</div>
-									{#if error}
+
+									{#if clientError || form?.error}
 										<div class="input-group mt-3">
-											<p class="text-danger"><em>{error}</em></p>
+											<p class="text-danger"><em>{clientError || form?.error}</em></p>
 										</div>
 									{/if}
+
 									<div class="input-group mt-3">
 										<p><em>Enter your credentials to login.</em></p>
 									</div>
@@ -149,10 +130,11 @@
 					</div>
 				</div>
 			</div>
-			<footer class="row">
+            <footer class="row">
 				<div class="col-12 font-weight-light text-center">
 					<p class="d-inline-block tm-bg-black text-white py-2 px-4">
-						Copyright &copy; 2018 Admin Dashboard . Created by
+						Copyright &copy;
+						2018 Admin Dashboard . Created by
 						<a rel="nofollow" href="https://www.tooplate.com" class="text-white tm-footer-link"
 							>Tooplate</a
 						>
@@ -179,7 +161,7 @@
 	}
 	.middle-background {
 		height: 60vh;
-		max-width: 1400px; /* Optional: constrain the width on very large screens */
+		max-width: 1400px;
 		margin: 0 auto;
 		border-radius: 1rem;
 		position: relative;

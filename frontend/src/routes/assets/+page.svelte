@@ -1,38 +1,45 @@
 <script lang="ts">
-    import { goto, replaceState } from '$app/navigation';
+    import { goto } from '$app/navigation';
     import { page } from '$app/state';
-    import { getAssets, searchAssets, type Asset } from '$lib/services/assetService';    import { logout } from '$lib/services/userService';
-    import { pb } from '$lib/pocketbase';
-    import { bs, Swal } from '$lib/stores';
+    import { enhance } from '$app/forms';
     import Navbar from '$lib/components/Navbar.svelte';
     import BorrowForm from '$lib/components/BorrowForm.svelte';
+    import { bs, Swal } from '$lib/stores';
+    import type { PageData } from './$types';
 
-    let { data } = $props();
-    let currentUser = $derived(data?.currentUser);
+    // 1. 接收 Server 資料
+    // 這裡暫時用 form?: any 防止 ActionData 型別報錯
+    let { data, form } = $props<{ data: PageData, form?: any }>();
 
-    // 資產數據狀態
-    let assets = $state<Asset[]>([]);
-    let loading = $state(true);
-    let error = $state<string | null>(null);
+    // 使用 $derived 連動資料 (Single Source of Truth)
+    let currentUser = $derived(data.currentUser);
+    let assets = $derived(data.assets?.items || []);
+    let totalPages = $derived(data.assets?.totalPages || 0);
+    let currentPage = $derived(data.assets?.page || 1);
+    let totalItems = $derived(data.assets?.totalItems || 0);
+
+    // 從 Server 回傳或 URL 取得當前排序
+    let currentSort = $derived(data.currentSort || '-created');
+
+    // URL 參數狀態 (初始化 UI 顯示用)
+    // 直接存取 page.url，不需要 $
+    let searchQuery = $state(page.url.searchParams.get('search') || '');
+    let statusFilter = $state(page.url.searchParams.get('status') || '');
+
+    // 選擇狀態
     let selectedAssets = $state<string[]>([]);
 
-    // 搜尋、過濾與排序狀態
-    let searchQuery = $state('');
-    let statusFilter = $state('');
-    let sortOrder = $state('asset_id'); // 預設排序
-
-    // 分頁狀態
-    let currentPage = $state(1);
-    let perPage = 20;
-    let totalItems = $state(0);
-    let totalPages = $state(0);
-
-    // Modal state
+    // Modal 相關
     let borrowModalElement: HTMLElement;
     let borrowModalInstance: any | null = $state(null);
-    let selectedAssetForBorrow: Asset | null = $state(null);
+    let selectedAssetForBorrow: any | null = $state(null);
 
-    // 狀態選項配置
+    // Store 訂閱
+    let bsInstance: any = null;
+    let SwalInstance: any = null;
+    bs.subscribe(value => bsInstance = value);
+    Swal.subscribe(value => SwalInstance = value);
+
     const statusOptions = [
         { value: '', label: '全部狀態' },
         { value: 'active', label: '正常' },
@@ -44,84 +51,102 @@
         { value: 'borrowed', label: '借出中' }
     ];
 
-    // 核心邏輯：載入資產
-    async function loadAssets(page = 1) {
-        try {
-            loading = true;
-            error = null;
+    // --- 核心導航邏輯 ---
 
-            const filter = statusFilter ? `status = "${statusFilter}"` : '';
+    function updateParams() {
+        // 使用 page.url
+        const params = new URLSearchParams(page.url.searchParams);
 
-            let result;
-            if (searchQuery.trim()) {
-                result = await searchAssets(searchQuery.trim(), {
-                    filter: filter,
-                    page: page,
-                    perPage: perPage,
-                    expand: 'category,assigned_to'
-                });
-            } else {
-                result = await getAssets({
-                    filter: filter,
-                    page: page,
-                    perPage: perPage,
-                    expand: 'category,assigned_to'
-                });
-            }
+        if (searchQuery) params.set('search', searchQuery);
+        else params.delete('search');
 
-            assets = result.items.map((record: any) => ({
-                ...record,
-                category: record.expand?.category,
-                assigned_to: record.expand?.assigned_to
-            })) as unknown as Asset[];
+        if (statusFilter) params.set('status', statusFilter);
+        else params.delete('status');
 
-            totalItems = result.totalItems;
-            totalPages = result.totalPages;
-            currentPage = result.page;
-        } catch (err) {
-            error = err instanceof Error ? err.message : '載入資產失敗';
-        } finally {
-            loading = false;
+        params.set('page', '1'); // 搜尋條件變更時重置回第一頁
+        goto(`?${params.toString()}`);
+    }
+
+    // 排序邏輯
+    function handleSort(field: string) {
+        // 使用 page.url
+        const params = new URLSearchParams(page.url.searchParams);
+
+        if (currentSort === field) {
+            params.set('sort', `-${field}`);
+        } else if (currentSort === `-${field}`) {
+            params.set('sort', field);
+        } else {
+            params.set('sort', field);
+        }
+
+        params.set('page', '1');
+        goto(`?${params.toString()}`);
+    }
+
+    function goToPage(p: number) {
+        if (p >= 1 && p <= totalPages) {
+            // 使用 page.url
+            const params = new URLSearchParams(page.url.searchParams);
+            params.set('page', p.toString());
+            goto(`?${params.toString()}`);
         }
     }
 
-    // Modal handlers
-    function showBorrowModal(asset: Asset) {
+    // --- 刪除邏輯 (Server Action) ---
+    let deleteForm: HTMLFormElement;
+    let deleteId = $state('');
+
+    async function confirmDelete(id: string) {
+        const result = await SwalInstance?.fire({
+            title: '確定要刪除此資產？',
+            text: "此操作無法復原！",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: '確認刪除',
+            cancelButtonText: '取消'
+        });
+
+        if (result.isConfirmed) {
+            deleteId = id;
+            setTimeout(() => deleteForm.requestSubmit(), 0);
+        }
+    }
+
+    // --- 借用 Modal 邏輯 ---
+    function openBorrowModal(event: MouseEvent, asset: any) {
+        event.stopPropagation();
         selectedAssetForBorrow = asset;
         borrowModalInstance?.show();
     }
 
     function handleBorrowSuccess() {
         borrowModalInstance?.hide();
-        $Swal.fire({
-            title: '成功',
-            text: '資產借用申請成功！',
-            icon: 'success',
-            timer: 2000,
-            showConfirmButton: false
-        });
-        loadAssets(currentPage);
+        SwalInstance?.fire('成功', '資產借用申請成功！', 'success');
     }
 
-    function handleBorrowClick(event: MouseEvent, asset: Asset) {
-        event.stopPropagation();
-        showBorrowModal(asset);
-    }
-
-    // 處理搜尋與過濾
-    function handleSearch() {
-        currentPage = 1;
-        loadAssets(1);
-    }
-
-    // 分頁跳轉
-    function goToPage(page: number) {
-        if (page >= 1 && page <= totalPages) {
-            loadAssets(page);
+    // --- 選擇邏輯 (保留 UI 互動) ---
+    function toggleAssetSelection(assetId: string) {
+        if (selectedAssets.includes(assetId)) {
+            selectedAssets = selectedAssets.filter(id => id !== assetId);
+        } else {
+            selectedAssets = [...selectedAssets, assetId];
         }
     }
 
-    // 取得狀態對應的 Bootstrap Badge 類別
+    function toggleSelectAll() {
+        if (assets.length > 0 && assets.every((a: any) => selectedAssets.includes(a.id))) {
+            const currentPageIds = assets.map((a: any) => a.id);
+            selectedAssets = selectedAssets.filter(id => !currentPageIds.includes(id));
+        } else {
+            const newIds = assets.map((a: any) => a.id).filter((id: string) => !selectedAssets.includes(id));
+            selectedAssets = [...selectedAssets, ...newIds];
+        }
+    }
+
+    // --- Helper functions ---
     function getStatusBadgeClass(status: string) {
         const classes: Record<string, string> = {
             active: 'text-bg-success',
@@ -139,139 +164,11 @@
         return statusOptions.find(opt => opt.value === status)?.label || status;
     }
 
-    // 選擇邏輯
-    function toggleAssetSelection(assetId: string) {
-        selectedAssets = selectedAssets.includes(assetId)
-            ? selectedAssets.filter(id => id !== assetId)
-            : [...selectedAssets, assetId];
-    }
-
-    function toggleSelectAll() {
-        selectedAssets = selectedAssets.length === assets.length ? [] : assets.map(a => a.id);
-    }
-
-    async function handleDelete(id: string) {
-        // 從 store 獲取 Swal 實例
-        const swalInstance = $Swal;
-        const result = await swalInstance.fire({
-            title: '確定要刪除此資產？',
-            text: "此操作無法復原！",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#dc3545',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: '確認刪除',
-            cancelButtonText: '取消'
-        });
-
-        if (result.isConfirmed) {
-            try {
-                await pb.collection('assets').delete(id);
-                await swalInstance.fire('已刪除！', '資產已被成功刪除。', 'success');
-                loadAssets(currentPage);
-                selectedAssets = selectedAssets.filter(itemId => itemId !== id);
-            } catch (err) {
-                swalInstance.fire('錯誤', '刪除資產時發生錯誤', 'error');
-            }
-        }
-    }
-
-    // 處理排序
-    function handleSort(field: string) {
-        const newSortOrder = sortOrder === field ? `-${field}` : field;
-        sortOrder = newSortOrder;
-        // 使用 SvelteKit 的 replaceState 避免觸發 $effect 重新載入資料
-        replaceState(`?sort=${newSortOrder}`, {});
-        // 直接在瀏覽器端排序
-        sortAssets();
-    }
-
-    // 在瀏覽器端排序資產
-    function sortAssets() {
-        if (assets.length === 0) return;
-
-        const field = sortOrder.replace('-', '');
-        const direction = sortOrder.startsWith('-') ? -1 : 1;
-
-        assets.sort((a, b) => {
-            let valueA, valueB;
-
-            switch (field) {
-                case 'asset_id':
-                    valueA = a.asset_id;
-                    valueB = b.asset_id;
-                    break;
-                case 'name':
-                    valueA = a.name;
-                    valueB = b.name;
-                    break;
-                case 'category':
-                    valueA = a.category?.name || '';
-                    valueB = b.category?.name || '';
-                    break;
-                case 'status':
-                    valueA = a.status;
-                    valueB = b.status;
-                    break;
-                case 'location':
-                    valueA = a.location || '';
-                    valueB = b.location || '';
-                    break;
-                case 'assigned_to':
-                    valueA = a.assigned_to?.name || a.assigned_to?.email || '';
-                    valueB = b.assigned_to?.name || b.assigned_to?.email || '';
-                    break;
-                case 'updated':
-                    valueA = new Date(a.updated).getTime();
-                    valueB = new Date(b.updated).getTime();
-                    break;
-                default:
-                    return 0;
-            }
-
-            // 確保排序的穩定性，當值相同時保持原有順序
-            if (valueA === valueB) return 0;
-
-            if (typeof valueA === 'string' && typeof valueB === 'string') {
-                return valueA.localeCompare(valueB) * direction;
-            } else if (typeof valueA === 'number' && typeof valueB === 'number') {
-                return (valueA - valueB) * direction;
-            }
-
-            return 0;
-        });
-    }
-
-    function handleLogout() {
-        logout();
-        goto('/login');
-    }
-
     $effect(() => {
-        // Initialize modal
-        if (borrowModalElement && $bs) {
-            borrowModalInstance = new $bs.Modal(borrowModalElement);
+        if (borrowModalElement && bsInstance) {
+            borrowModalInstance = new bsInstance.Modal(borrowModalElement);
         }
-
-        const urlSort = page.url.searchParams.get('sort');
-        if (urlSort) {
-            sortOrder = urlSort;
-        }
-
-        const urlSearch = page.url.searchParams.get('search');
-        if (urlSearch) {
-            searchQuery = urlSearch;
-        }
-
-        // 使用 setTimeout 確保 DOM 完全載入後再載入資料，避免自動取消
-        setTimeout(() => {
-            loadAssets();
-        }, 0);
-
-        // Cleanup modal instance
-        return () => {
-            borrowModalInstance?.dispose();
-        }
+        return () => borrowModalInstance?.dispose();
     });
 </script>
 
@@ -281,7 +178,26 @@
 
 <div class="min-vh-100 pb-5">
     <div class="container-fluid px-4">
-        <Navbar {handleLogout} {currentUser} />
+        <Navbar />
+
+        <form
+            method="POST"
+            action="?/delete"
+            bind:this={deleteForm}
+            use:enhance={() => {
+                return async ({ result, update }) => {
+                    await update();
+                    if (result.type === 'success') {
+                        SwalInstance?.fire('已刪除！', '資產已被成功刪除。', 'success');
+                        selectedAssets = selectedAssets.filter(id => id !== deleteId);
+                    } else {
+                        SwalInstance?.fire('錯誤', '刪除失敗', 'error');
+                    }
+                };
+            }}
+        >
+            <input type="hidden" name="id" value={deleteId}>
+        </form>
 
         <div class="card shadow-sm bg-white bg-opacity-90 mb-4 mt-4">
             <div class="card-body p-4">
@@ -293,21 +209,22 @@
                             id="search"
                             class="form-control shadow-none"
                             placeholder="輸入名稱、編號或序號..."
-                            value={searchQuery}
-                            oninput={(e) => searchQuery = e.currentTarget.value}
-                            onkeydown={(e) => e.key === 'Enter' && handleSearch()}
+                            bind:value={searchQuery}
+                            onkeydown={(e) => e.key === 'Enter' && updateParams()}
                         />
                     </div>
                     <div class="col-md-3">
                         <label for="status" class="form-label small fw-bold text-secondary">狀態過濾</label>
-                        <select id="status" class="form-select shadow-none" value={statusFilter} onchange={(e) => { statusFilter = e.currentTarget.value; handleSearch(); }}>
+                        <select id="status" class="form-select shadow-none"
+                            bind:value={statusFilter}
+                            onchange={updateParams}>
                             {#each statusOptions as option}
                                 <option value={option.value}>{option.label}</option>
                             {/each}
                         </select>
                     </div>
                     <div class="col-md-2">
-                        <button class="btn btn-primary w-100" onclick={handleSearch}>
+                        <button class="btn btn-primary w-100" onclick={updateParams}>
                             <i class="mdi mdi-magnify"></i> 搜尋
                         </button>
                     </div>
@@ -324,7 +241,7 @@
             <div class="card-header bg-white bg-opacity-90 py-3">
                 <h5 class="card-title mb-0 fw-bold">資產清單</h5>
             </div>
-            <div class="table-responsive">
+             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light text-muted">
                         <tr class="user-select-none">
@@ -332,60 +249,35 @@
                                 <input
                                     type="checkbox"
                                     class="form-check-input"
-                                    checked={selectedAssets.length === assets.length && assets.length > 0}
+                                    checked={assets.length > 0 && assets.every((a: any) => selectedAssets.includes(a.id))}
                                     onchange={toggleSelectAll}
                                 />
                             </th>
                             <th class="cursor-pointer" onclick={() => handleSort('asset_id')}>
                                 資產編號
-                                {#if sortOrder.includes('asset_id')}
-                                    <i class="mdi {sortOrder === 'asset_id' ? 'mdi-arrow-up' : 'mdi-arrow-down'}"></i>
-                                {/if}
+                                {#if currentSort === 'asset_id'} <i class="mdi mdi-arrow-up text-primary"></i> {/if}
+                                {#if currentSort === '-asset_id'} <i class="mdi mdi-arrow-down text-primary"></i> {/if}
                             </th>
                             <th class="cursor-pointer" onclick={() => handleSort('name')}>
                                 名稱
-                                {#if sortOrder.includes('name')}
-                                    <i class="mdi {sortOrder === 'name' ? 'mdi-arrow-up' : 'mdi-arrow-down'}"></i>
-                                {/if}
+                                {#if currentSort === 'name'} <i class="mdi mdi-arrow-up text-primary"></i> {/if}
+                                {#if currentSort === '-name'} <i class="mdi mdi-arrow-down text-primary"></i> {/if}
                             </th>
-                            <th class="cursor-pointer" onclick={() => handleSort('category')}>
-                                類別
-                                {#if sortOrder.includes('category')}
-                                    <i class="mdi {sortOrder === 'category' ? 'mdi-arrow-up' : 'mdi-arrow-down'}"></i>
-                                {/if}
-                            </th>
+                            <th>類別</th>
                             <th>品牌/型號</th>
-                            <th class="cursor-pointer" onclick={() => handleSort('status')}>
-                                狀態
-                                {#if sortOrder.includes('status')}
-                                    <i class="mdi {sortOrder === 'status' ? 'mdi-arrow-up' : 'mdi-arrow-down'}"></i>
-                                {/if}
-                            </th>
-                            <th class="cursor-pointer" onclick={() => handleSort('location')}>
-                                位置
-                                {#if sortOrder.includes('location')}
-                                    <i class="mdi {sortOrder === 'location' ? 'mdi-arrow-up' : 'mdi-arrow-down'}"></i>
-                                {/if}
-                            </th>
-                            <th class="cursor-pointer" onclick={() => handleSort('assigned_to')}>
-                                負責人
-                                {#if sortOrder.includes('assigned_to')}
-                                    <i class="mdi {sortOrder === 'assigned_to' ? 'mdi-arrow-up' : 'mdi-arrow-down'}"></i>
-                                {/if}
-                            </th>
-                            <th class="cursor-pointer" onclick={() => handleSort('updated')}>
-                                更新時間
-                                {#if sortOrder.includes('updated')}
-                                    <i class="mdi {sortOrder === 'updated' ? 'mdi-arrow-up' : 'mdi-arrow-down'}"></i>
-                                {/if}
+                            <th>狀態</th>
+                            <th>位置</th>
+                            <th>保管人</th>
+                            <th class="cursor-pointer" onclick={() => handleSort('created')}>
+                                建立日期
+                                {#if currentSort === 'created'} <i class="mdi mdi-arrow-up text-primary"></i> {/if}
+                                {#if currentSort === '-created'} <i class="mdi mdi-arrow-down text-primary"></i> {/if}
                             </th>
                             <th class="text-end px-4">操作</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {#if loading}
-                            <tr><td colspan="10" class="text-center py-5 text-muted">載入中...</td></tr>
-                        {:else if assets.length === 0}
+                        {#if assets.length === 0}
                             <tr><td colspan="10" class="text-center py-5 text-muted">找不到任何資產</td></tr>
                         {:else}
                             {#each assets as asset}
@@ -400,7 +292,7 @@
                                     </td>
                                     <td class="fw-medium">{asset.asset_id}</td>
                                     <td>{asset.name}</td>
-                                    <td>{asset.category?.name || '未分類'}</td>
+                                    <td>{asset.expand?.category?.name || '未分類'}</td>
                                     <td>{asset.brand || ''} {asset.model || ''}</td>
                                     <td>
                                         <span class="badge rounded-pill {getStatusBadgeClass(asset.status)}">
@@ -408,20 +300,19 @@
                                         </span>
                                     </td>
                                     <td>{asset.location || '-'}</td>
-                                    <td>{asset.assigned_to?.name || asset.assigned_to?.email || '未指派'}</td>
-                                    <td class="text-muted small">{new Date(asset.updated).toLocaleDateString('zh-TW')}</td>
+                                    <td>{asset.expand?.assigned_to?.name || asset.expand?.assigned_to?.email || '未指派'}</td>
+                                    <td class="text-muted small">{new Date(asset.created).toLocaleDateString()}</td>
                                     <td class="text-end px-4" onclick={(e) => e.stopPropagation()}>
                                         {#if asset.status === 'active'}
-                                            <button onclick={(e) => handleBorrowClick(e, asset)} class="btn btn-sm btn-outline-primary me-2" title="借用">
+                                            <button onclick={(e) => openBorrowModal(e, asset)} class="btn btn-sm btn-outline-primary me-2" title="借用">
                                                 <i class="mdi mdi-hand-heart"></i> 借用
                                             </button>
                                         {/if}
                                         {#if currentUser?.role?.includes('admin')}
                                             <button
                                                 class="btn btn-link text-danger p-0 shadow-none"
-                                                title="刪除資產"
-                                                aria-label="刪除資產"
-                                                onclick={(e) => { e.stopPropagation(); handleDelete(asset.id); }}
+                                                title="刪除"
+                                                onclick={(e) => { e.stopPropagation(); confirmDelete(asset.id); }}
                                             >
                                                 <i class="mdi mdi-delete-outline fs-5"></i>
                                             </button>
@@ -432,38 +323,33 @@
                         {/if}
                     </tbody>
                 </table>
-            </div>
+             </div>
 
-            <div class="card-footer bg-white py-3 border-0">
+             <div class="card-footer bg-white py-3 border-0">
                 <div class="d-flex justify-content-between align-items-center">
-                    {#if currentUser?.role?.includes('admin')}
-                        <button class="btn btn-outline-danger btn-sm" disabled={selectedAssets.length === 0}>
-                            刪除所選 ({selectedAssets.length})
-                        </button>
-                    {/if}
+                    <div>
+                         {#if currentUser?.role?.includes('admin')}
+                            <button class="btn btn-outline-danger btn-sm me-2" disabled={selectedAssets.length === 0}>
+                                刪除所選 ({selectedAssets.length})
+                            </button>
+                        {/if}
+                        <span class="small text-muted ms-2">
+                            總共 {totalItems} 筆
+                        </span>
+                    </div>
 
                     <nav aria-label="分頁">
                         <ul class="pagination pagination-sm mb-0">
                             <li class="page-item {currentPage === 1 ? 'disabled' : ''}">
-                                <button class="page-link" onclick={() => goToPage(currentPage - 1)}>
-                                    &larr;
-                                </button>
+                                <button class="page-link" onclick={() => goToPage(currentPage - 1)}>&larr;</button>
                             </li>
-
                             {#each Array.from({length: totalPages}) as _, i}
-                                {#if i + 1 === 1 || i + 1 === totalPages || (i + 1 >= currentPage - 1 && i + 1 <= currentPage + 1)}
-                                    <li class="page-item {currentPage === i + 1 ? 'active' : ''}">
-                                        <button class="page-link" onclick={() => goToPage(i + 1)}>{i + 1}</button>
-                                    </li>
-                                {:else if i + 1 === currentPage - 2 || i + 1 === currentPage + 2}
-                                    <li class="page-item disabled"><span class="page-link">...</span></li>
-                                {/if}
+                                <li class="page-item {currentPage === i + 1 ? 'active' : ''}">
+                                    <button class="page-link" onclick={() => goToPage(i + 1)}>{i + 1}</button>
+                                </li>
                             {/each}
-
                             <li class="page-item {currentPage === totalPages ? 'disabled' : ''}">
-                                <button class="page-link" onclick={() => goToPage(currentPage + 1)}>
-                                    &rarr;
-                                </button>
+                                <button class="page-link" onclick={() => goToPage(currentPage + 1)}>&rarr;</button>
                             </li>
                         </ul>
                     </nav>
@@ -473,7 +359,6 @@
     </div>
 </div>
 
-<!-- Borrow Modal -->
 <div class="modal fade" id="borrowModal" tabindex="-1" aria-labelledby="borrowModalLabel" aria-hidden="true" bind:this={borrowModalElement}>
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -486,6 +371,8 @@
             {#if selectedAssetForBorrow}
                 <BorrowForm
                     asset={selectedAssetForBorrow}
+                    borrowableUsers={data.borrowableUsers}
+                    currentUser={currentUser}
                     onsuccess={handleBorrowSuccess}
                     oncancel={() => borrowModalInstance?.hide()}
                 />

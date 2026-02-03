@@ -1,76 +1,27 @@
-import { pb } from '../pocketbase';
-import { logger } from '../utils/logger';
+import type PocketBase from 'pocketbase';
+import { logger } from '$lib/utils/logger';
+import type { Asset, AssetCategory } from '$lib/types';
+import { getUsersList, isAdmin } from './userService';
 
 // =================================================================
-// 介面
-// =================================================================
-
-export interface AssetCategory {
-  id: string;
-  name: string;
-  prefix: string;
-  description?: string;
-  next_sequence: number;
-  created: string;
-  updated: string;
-}
-
-export interface Asset {
-  id: string;
-  asset_id: string;
-  name: string;
-  brand?: string;
-  model?: string;
-  serial_number?: string;
-  purchase_date?: string;
-  purchase_price?: number;
-  warranty_years?: number;
-  location?: string;
-  department?: string;
-  category?: {
-    id: string;
-    name: string;
-    prefix: string;
-  };
-  assigned_to?: {
-    id: string;
-    name?: string;
-    email: string;
-  };
-  images?: string[];
-  confidentiality_score?: number;
-  integrity_score?: number;
-  availability_score?: number;
-  total_risk_score?: number;
-  status: 'active' | 'inactive' | 'maintenance' | 'retired' | 'lost' | 'stolen' | 'borrowed';
-  requires_approval?: boolean; // 預留欄位，若資料庫無此欄位則為 undefined
-  notes?: string;
-  created: string;
-  updated: string;
-}
-
-
-// =================================================================
-// 資產函式
+// 資產函式 (Server Side)
 // =================================================================
 
 /**
  * 獲取資產的分頁列表
  */
-export async function getAssets(options?: {
+export async function getAssets(pb: PocketBase, page = 1, perPage = 20, options?: {
   filter?: string;
   sort?: string;
-  page?: number;
-  perPage?: number;
   expand?: string;
 }) {
   try {
     const records = await pb.collection('assets').getList(
-      options?.page || 1,
-      options?.perPage || 50,
+      page,
+      perPage,
       {
-        filter: options?.filter,
-        sort: options?.sort,
+        filter: options?.filter || '',
+        sort: options?.sort || '-created',
         expand: options?.expand || 'category,assigned_to'
       }
     );
@@ -84,7 +35,7 @@ export async function getAssets(options?: {
 /**
  * 透過 ID 獲取單個資產
  */
-export async function getAsset(id: string) {
+export async function getAsset(pb: PocketBase, id: string) {
   try {
     const record = await pb.collection('assets').getOne(id, {
         expand: 'category,assigned_to'
@@ -97,11 +48,11 @@ export async function getAsset(id: string) {
 }
 
 /**
- * 創建一個新資產
+ * 創建一個新資產 (基本版)
  * 注意：此函式不處理資產 ID 生成
  * 請使用 `createAssetWithIdGeneration`
  */
-export async function createAsset(data: Omit<Asset, 'id' | 'created' | 'updated'>) {
+export async function createAsset(pb: PocketBase, data: Omit<Asset, 'id' | 'created' | 'updated'>) {
   try {
     const record = await pb.collection('assets').create(data);
     logger.log('資產創建成功:', record);
@@ -115,7 +66,7 @@ export async function createAsset(data: Omit<Asset, 'id' | 'created' | 'updated'
 /**
  * 更新現有資產
  */
-export async function updateAsset(id: string, data: Partial<Omit<Asset, 'id' | 'created' | 'updated'>>) {
+export async function updateAsset(pb: PocketBase, id: string, data: Partial<Omit<Asset, 'id' | 'created' | 'updated'>>) {
   try {
     const record = await pb.collection('assets').update(id, data);
     logger.log(`資產 ${id} 更新成功:`, record);
@@ -129,7 +80,7 @@ export async function updateAsset(id: string, data: Partial<Omit<Asset, 'id' | '
 /**
  * 透過 ID 刪除資產
  */
-export async function deleteAsset(id: string) {
+export async function deleteAsset(pb: PocketBase, id: string) {
   try {
     await pb.collection('assets').delete(id);
     logger.log(`資產 ${id} 刪除成功`);
@@ -142,27 +93,16 @@ export async function deleteAsset(id: string) {
 /**
  * 根據查詢字串搜尋資產
  */
-export async function searchAssets(query: string, options?: {
-  filter?: string;
-  sort?: string;
-  page?: number;
-  perPage?: number;
-  expand?: string;
-}) {
+export async function searchAssets(pb: PocketBase, query: string, page = 1) {
   try {
-    const baseFilter = `name ~ "${query}" || notes ~ "${query}" || serial_number ~ "${query}" || asset_id ~ "${query}"`;
-    const combinedFilter = options?.filter ? `${baseFilter} && ${options.filter}` : baseFilter;
+    // 保留原始碼中的搜尋邏輯，包含 notes
+    const filter = `name ~ "${query}" || notes ~ "${query}" || serial_number ~ "${query}" || asset_id ~ "${query}"`;
 
-    const records = await pb.collection('assets').getList(
-      options?.page || 1,
-      options?.perPage || 50,
-      {
-        filter: combinedFilter,
-        sort: options?.sort,
-        expand: options?.expand || 'category,assigned_to'
-      }
-    );
-    return records;
+    // 重用 getAssets 邏輯
+    return await getAssets(pb, page, 20, {
+        filter,
+        sort: '-created'
+    });
   } catch (error) {
     logger.error('搜尋資產失敗:', error);
     throw error;
@@ -177,22 +117,23 @@ export async function searchAssets(query: string, options?: {
  * 創建資產並自動生成 asset_id，處理並發重試
  */
 export async function createAssetWithIdGeneration(
+  pb: PocketBase, // 注入 pb
   formDataObj: FormData,
   categoryId: string,
-  categories: any[]
+  categories: AssetCategory[]
 ) {
     let retries = 3;
     let lastError: any = null;
 
     while (retries > 0) {
         try {
-            const { assetId, newSequence } = await calculateNextAssetIdAndSequence(categoryId, categories);
+            // 傳遞 pb 給內部函式
+            const { assetId, newSequence } = await calculateNextAssetIdAndSequence(pb, categoryId, categories);
             formDataObj.set('asset_id', assetId);
 
             const createdAsset = await pb.collection('assets').create(formDataObj);
 
             // 修改點：只有當新的序號大於目前的序號時，才更新資料庫
-            // 這樣當填補中間缺號時（例如 3 被刪除，重新新增 3），就不會推升 next_sequence（例如 5）
             const currentCategory = categories.find(c => c.id === categoryId);
             if (currentCategory && newSequence > currentCategory.next_sequence) {
                 try {
@@ -207,6 +148,7 @@ export async function createAssetWithIdGeneration(
             return createdAsset; // 成功
         } catch (error: any) {
             lastError = error;
+            // 檢查是否為唯一性衝突 (asset_id 重複)
             if (error?.data?.data?.asset_id?.code === 'validation_not_unique') {
                 retries--;
                 if (retries > 0) {
@@ -225,13 +167,18 @@ export async function createAssetWithIdGeneration(
 /**
  * 計算下一個可用的資產 ID 和建議的下一個序號
  */
-export async function calculateNextAssetIdAndSequence(categoryId: string, categories: any[]): Promise<{ assetId: string, newSequence: number }> {
+export async function calculateNextAssetIdAndSequence(
+    pb: PocketBase, // 注入 pb
+    categoryId: string,
+    categories: AssetCategory[]
+): Promise<{ assetId: string, newSequence: number }> {
     try {
         const category = categories.find(cat => cat.id === categoryId);
         if (!category) {
             throw new Error('未找到指定的資產類別');
         }
 
+        // 使用注入的 pb
         const existingAssets = await pb.collection('assets').getList(1, 1000, {
             filter: `category = "${categoryId}"`,
             sort: 'asset_id'
@@ -257,9 +204,7 @@ export async function calculateNextAssetIdAndSequence(categoryId: string, catego
 
         const assetId = `${category.prefix}-${nextNumber.toString().padStart(3, '0')}`;
 
-        // 修改點：計算邏輯修正
-        // 原本邏輯：Math.max(curr, next) + 1  => 即使 next 小於 curr，也會導致 +1
-        // 修正邏輯：Math.max(curr, next + 1)  => 只有當 next + 1 超越 curr 時，才會改變
+        // 修正邏輯：Math.max(curr, next + 1)
         const newSequence = Math.max(category.next_sequence, nextNumber + 1);
 
         return { assetId, newSequence };
@@ -273,9 +218,9 @@ export async function calculateNextAssetIdAndSequence(categoryId: string, catego
 /**
  * 一個更簡單的工具，僅生成下一個資產 ID
  */
-export async function generateAssetId(categoryId: string, categories: any[]): Promise<string> {
+export async function generateAssetId(pb: PocketBase, categoryId: string, categories: AssetCategory[]): Promise<string> {
   try {
-    const { assetId } = await calculateNextAssetIdAndSequence(categoryId, categories);
+    const { assetId } = await calculateNextAssetIdAndSequence(pb, categoryId, categories);
     return assetId;
   } catch (error) {
     logger.error('生成資產 ID 失敗:', error);
@@ -291,7 +236,7 @@ export async function generateAssetId(categoryId: string, categories: any[]): Pr
 /**
  * 獲取資產類別的分頁列表
  */
-export async function getAssetCategories(options?: {
+export async function getAssetCategories(pb: PocketBase, options?: {
   filter?: string;
   sort?: string;
   page?: number;
@@ -302,7 +247,7 @@ export async function getAssetCategories(options?: {
       options?.page || 1,
       options?.perPage || 50,
       {
-        filter: options?.filter,
+        filter: options?.filter || '',
         sort: options?.sort || 'name'
       }
     );
@@ -314,9 +259,28 @@ export async function getAssetCategories(options?: {
 }
 
 /**
+ * 獲取資產頁面所需的options
+ */
+export async function getAssetFormOptions(pb: PocketBase, currentUser: any) {
+    const categoriesResult = await getAssetCategories(pb, { sort: 'name' });
+
+    let borrowableUsers = [];
+    if (isAdmin(currentUser)) {
+        borrowableUsers = await getUsersList(pb);
+    } else if (currentUser) {
+        borrowableUsers = [currentUser];
+    }
+
+    return {
+        categories: JSON.parse(JSON.stringify(categoriesResult.items)),
+        borrowableUsers: JSON.parse(JSON.stringify(borrowableUsers))
+    };
+}
+
+/**
  * 透過 ID 獲取單個資產類別
  */
-export async function getAssetCategory(id: string) {
+export async function getAssetCategory(pb: PocketBase, id: string) {
   try {
     const record = await pb.collection('asset_categories').getOne(id);
     return record as unknown as AssetCategory;
@@ -329,10 +293,11 @@ export async function getAssetCategory(id: string) {
 /**
  * 創建一個新的資產類別 (僅限管理員)
  */
-export async function createAssetCategory(data: Omit<AssetCategory, 'id' | 'created' | 'updated'>) {
+export async function createAssetCategory(pb: PocketBase, data: Omit<AssetCategory, 'id' | 'created' | 'updated'>) {
     try {
-        const user = pb.authStore.model;
-        if (!user || !Array.isArray(user.role) || !user.role.includes('admin')) {
+        // 使用注入的 pb 檢查權限
+        const user = pb.authStore.record;
+        if (!isAdmin(user)) {
             throw new Error('需要管理員權限才能創建資產類別');
         }
 
@@ -364,10 +329,10 @@ export async function createAssetCategory(data: Omit<AssetCategory, 'id' | 'crea
 /**
  * 更新資產類別 (僅限管理員)
  */
-export async function updateAssetCategory(id: string, data: Partial<Omit<AssetCategory, 'id' | 'created' | 'updated'>>) {
+export async function updateAssetCategory(pb: PocketBase, id: string, data: Partial<Omit<AssetCategory, 'id' | 'created' | 'updated'>>) {
   try {
-    const user = pb.authStore.model;
-    if (!user || !Array.isArray(user.role) || !user.role.includes('admin')) {
+    const user = pb.authStore.record;
+    if (!isAdmin(user)) {
       throw new Error('需要管理員權限才能更新資產類別');
     }
 
@@ -383,10 +348,10 @@ export async function updateAssetCategory(id: string, data: Partial<Omit<AssetCa
 /**
  * 刪除資產類別 (僅限管理員)
  */
-export async function deleteAssetCategory(id: string) {
+export async function deleteAssetCategory(pb: PocketBase, id: string) {
   try {
-    const user = pb.authStore.model;
-    if (!user || !Array.isArray(user.role) || !user.role.includes('admin')) {
+    const user = pb.authStore.record;
+    if (!isAdmin(user)) {
         throw new Error('需要管理員權限才能刪除資產類別');
     }
 

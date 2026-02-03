@@ -1,41 +1,57 @@
 <script lang="ts">
-  import { borrowAsset } from '$lib/services/borrowService';
-  import { pb } from '$lib/pocketbase';
+    import { enhance } from '$app/forms';
+    import type { Asset } from '$lib/types';
 
-  let { asset, onsuccess, oncancel } = $props();
+    // 定義 Props
+    let { asset, currentUser, borrowableUsers = [], onsuccess, oncancel } = $props<{
+        asset: Asset,
+        currentUser?: any,
+        borrowableUsers?: any[],
+        onsuccess?: (record?: any) => void,
+        oncancel?: () => void
+    }>();
 
-  const currentUser = pb.authStore.model;
-  let submitting = $state(false);
-  let expectedReturnDate = $state('');
-  let borrowImages = $state<FileList | null>(null);
-  let error = $state<string | null>(null);
+    let submitting = $state(false);
+    let error = $state<string | null>(null);
+    let expectedReturnDate = $state('');
 
-  async function handleSubmit() {
-    if (!expectedReturnDate) {
-      alert('請選擇預計歸還日期');
-      return;
+    // 計算預設歸還日期 (例如預設 7 天後)
+    const defaultDate = new Date();
+    defaultDate.setDate(defaultDate.getDate() + 7);
+    expectedReturnDate = defaultDate.toISOString().split('T')[0];
+
+    function handleCancel() {
+        if (oncancel) oncancel();
     }
-
-    submitting = true;
-    error = null;
-    try {
-      const newRecord = await borrowAsset(asset.id, expectedReturnDate, borrowImages || undefined);
-      if (onsuccess) onsuccess(newRecord);
-    } catch (err: any) {
-      console.error(err);
-      error = err.message || '借用申請失敗';
-      alert('借用失敗: ' + error);
-    } finally {
-      submitting = false;
-    }
-  }
-
-  function handleCancel() {
-    if (oncancel) oncancel();
-  }
 </script>
 
-<form onsubmit={handleSubmit}>
+<form
+    method="POST"
+    action="?/borrow"
+    enctype="multipart/form-data"
+    use:enhance={() => {
+        submitting = true;
+        error = null;
+
+        return async ({ result, update }) => {
+            submitting = false;
+
+            if (result.type === 'success') {
+                if (onsuccess) onsuccess(result.data);
+                await update();
+
+            } else if (result.type === 'failure') {
+                const data = result.data as Record<string, any>;
+                error = data?.error || '借用申請失敗';
+
+            } else if (result.type === 'error') {
+                error = '發生系統錯誤，請稍後再試';
+            }
+        };
+    }}
+>
+    <input type="hidden" name="asset" value={asset.id} />
+
     <div class="modal-body">
         {#if error}
             <div class="alert alert-danger">{error}</div>
@@ -52,8 +68,19 @@
         </div>
 
         <div class="mb-3">
-            <label for="borrower" class="form-label fw-bold">借用人</label>
-            <input id="borrower" type="text" class="form-control" value="{currentUser?.name || currentUser?.email || '未知使用者'}" disabled readonly />
+            <label for="user" class="form-label fw-bold">借用人</label>
+            {#if borrowableUsers && borrowableUsers.length > 1}
+                <select name="user" id="user" class="form-select">
+                    {#each borrowableUsers as user}
+                        <option value={user.id} selected={user.id === currentUser?.id}>
+                            {user.name || user.email}
+                        </option>
+                    {/each}
+                </select>
+            {:else}
+                <input type="hidden" name="user" value={currentUser?.id} />
+                <input type="text" class="form-control" value="{currentUser?.name || currentUser?.email || '未知使用者'}" disabled readonly />
+            {/if}
         </div>
 
         <div class="mb-3">
@@ -62,6 +89,7 @@
                 type="date"
                 class="form-control"
                 id="returnDate"
+                name="expected_return_date"
                 bind:value={expectedReturnDate}
                 min={new Date().toISOString().split('T')[0]}
                 required
@@ -74,9 +102,9 @@
                 type="file"
                 class="form-control"
                 id="images"
+                name="borrow_images"
                 accept="image/*"
                 multiple
-                onchange={(e) => borrowImages = e.currentTarget.files}
             />
             <div class="form-text">建議拍攝資產現況，以保障雙方權益。</div>
         </div>

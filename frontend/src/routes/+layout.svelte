@@ -1,53 +1,44 @@
 <script lang="ts">
-	import '../styles/global.css';
-	import '../styles/tooplate.css';
-	import 'bootstrap/dist/css/bootstrap.min.css';
-	import '@mdi/font/css/materialdesignicons.min.css';
-	import { onMount } from 'svelte';
-	import { browser } from '$app/environment';
-	import { pb } from '$lib/pocketbase';
-	import { isAuthenticated, getCurrentUser } from '$lib/services/userService';
-	import { bs, Swal } from '$lib/stores';
-	import { page } from '$app/stores';
+    import '../styles/global.css';
+    import '../styles/tooplate.css';
+    import 'bootstrap/dist/css/bootstrap.min.css';
+    import '@mdi/font/css/materialdesignicons.min.css';
 
-	// 導出 currentUser 供子組件使用
-	export let currentUser: any = null;
+    import { onMount } from 'svelte';
+    import { browser } from '$app/environment';
+    import { pb } from '$lib/pocketbase';
+    import { bs, Swal } from '$lib/stores';
 
-	// 立即嘗試從 sessionStorage 恢復認證狀態（同步執行）
-	const authData = typeof sessionStorage !== 'undefined' ?
-		sessionStorage.getItem('pb_auth') : null;
-	if (authData && !pb.authStore.isValid) {
-		try {
-			pb.authStore.loadFromCookie(authData);
-		} catch (error) {
-			console.warn('Failed to load auth from sessionStorage:', error);
-			if (typeof sessionStorage !== 'undefined') {
-				sessionStorage.removeItem('pb_auth');
-			}
-		}
-	}
+    // 1. Svelte 5: 使用 $props 接收 server 傳來的資料
+    let { data, children } = $props<{
+        data: { currentUser: any, token: string },
+        children: any
+    }>();
 
-	// 從 page store 獲取服務端驗證的用戶資料
-	$: if ($page.data?.currentUser) {
-		currentUser = $page.data.currentUser;
-	} else if (!currentUser && pb.authStore.isValid) {
-		// 如果沒有 page data 但 authStore 有效，使用 authStore 的資料
-		currentUser = pb.authStore.model;
-	}
+    // 2. Svelte 5: 使用 $effect 替代 $:
+    // 這是 "Hydration" (注水) 過程：
+    // 伺服器從 httpOnly Cookie 讀出 Token -> 傳給前端 -> 前端設定給 pb SDK
+    $effect(() => {
+        if (browser && data.token && data.currentUser) {
+            // 讓前端的 pb 實例知道現在是誰登入
+            // 這樣在前端 call pb.files.getUrl() 時才會有正確的權限
+            pb.authStore.save(data.token, data.currentUser);
+        } else if (browser) {
+            pb.authStore.clear();
+        }
+    });
 
-	onMount(async () => {
-		// onMount 中不需要額外處理，已經在上面同步處理了
-
-		// 動態載入 Bootstrap 和 SweetAlert2
-		if (browser) {
-			const [bootstrapModule, sweetalert2Module] = await Promise.all([
-				import('bootstrap'),
-				import('sweetalert2')
-			]);
-			bs.set(bootstrapModule);
-			Swal.set(sweetalert2Module.default);
-		}
-	});
+    onMount(async () => {
+        // 動態載入 UI 庫
+        if (browser) {
+            const [bootstrapModule, sweetalert2Module] = await Promise.all([
+                import('bootstrap'),
+                import('sweetalert2')
+            ]);
+            bs.set(bootstrapModule);
+            Swal.set(sweetalert2Module.default);
+        }
+    });
 </script>
 
-<slot />
+{@render children()}
