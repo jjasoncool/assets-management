@@ -2,11 +2,6 @@
 	import { page } from '$app/stores';
 	import { pb } from '../pocketbase';
 
-	// 修改：不再透過 props 傳入，而是直接監聽 SvelteKit 的 page store
-	// 這樣可以確保資料來源與 hooks/layout 一致
-	// export let handleLogout: () => void; // 移除
-	// export let currentUser: any; // 移除
-
 	// Svelte 5: 使用 $derived 獲取當前頁面資料中的 currentUser
 	let currentUser = $derived($page.data.currentUser);
 </script>
@@ -33,13 +28,19 @@
 		<div class="collapse navbar-collapse" id="navbarNav">
 			<ul class="navbar-nav me-auto mb-2 mb-lg-0">
 				<li class="nav-item">
-					<a class="nav-link active" aria-current="page" href="/"
+					<a
+						class="nav-link"
+						class:active={$page.url.pathname === '/'}
+						aria-current="page"
+						href="/"
 						><i class="mdi mdi-view-dashboard me-1"></i>Dashboard</a
 					>
 				</li>
 				<li class="nav-item dropdown">
 					<a
 						class="nav-link dropdown-toggle"
+						class:active={$page.url.pathname.startsWith('/assets') ||
+							$page.url.pathname.startsWith('/asset-categories')}
 						href="#!"
 						id="assetsDropdown"
 						role="button"
@@ -50,13 +51,19 @@
 					</a>
 					<ul class="dropdown-menu" aria-labelledby="assetsDropdown">
 						<li>
-							<a class="dropdown-item" href="/assets"
+							<a
+								class="dropdown-item"
+								class:active={$page.url.pathname.startsWith('/assets')}
+								href="/assets"
 								><i class="mdi mdi-format-list-bulleted me-2"></i>資產清單</a
 							>
 						</li>
 						{#if currentUser?.role?.includes('admin')}
 							<li>
-								<a class="dropdown-item" href="/asset-categories"
+								<a
+									class="dropdown-item"
+									class:active={$page.url.pathname.startsWith('/asset-categories')}
+									href="/asset-categories"
 									><i class="mdi mdi-shape me-2"></i>資產類別管理</a
 								>
 							</li>
@@ -66,6 +73,7 @@
 				<li class="nav-item dropdown">
 					<a
 						class="nav-link dropdown-toggle"
+						class:active={$page.url.pathname.startsWith('/borrow') || $page.url.pathname === '/return'}
 						href="#!"
 						id="borrowDropdown"
 						role="button"
@@ -76,12 +84,18 @@
 					</a>
 					<ul class="dropdown-menu" aria-labelledby="borrowDropdown">
 						<li>
-							<a class="dropdown-item" href="/borrow/list"
+							<a
+								class="dropdown-item"
+								class:active={$page.url.pathname.startsWith('/borrow')}
+								href="/borrow/list"
 								><i class="mdi mdi-account-clock me-2"></i>已借用清單</a
 							>
 						</li>
 						<li>
-							<a class="dropdown-item" href="/return"
+							<a
+								class="dropdown-item"
+								class:active={$page.url.pathname === '/return'}
+								href="/return"
 								><i class="mdi mdi-undo-variant me-2"></i>歸還資產</a
 							>
 						</li>
@@ -90,6 +104,8 @@
 				<li class="nav-item dropdown">
 					<a
 						class="nav-link dropdown-toggle"
+						class:active={$page.url.pathname.startsWith('/maintenance') ||
+							($page.url.pathname === '/assets' && $page.url.searchParams.get('status') === 'maintenance')}
 						href="#!"
 						id="maintenanceDropdown"
 						role="button"
@@ -100,24 +116,37 @@
 					</a>
 					<ul class="dropdown-menu" aria-labelledby="maintenanceDropdown">
 						<li>
-							<a class="dropdown-item" href="/maintenance"
+							<a
+								class="dropdown-item"
+								class:active={$page.url.pathname === '/maintenance' && !$page.url.search}
+								href="/maintenance"
 								><i class="mdi mdi-history me-2"></i>維護紀錄總覽</a
 							>
 						</li>
 						<li>
-							<a class="dropdown-item" href="/maintenance/create"
+							<a
+								class="dropdown-item"
+								class:active={$page.url.pathname === '/maintenance/create'}
+								href="/maintenance/create"
 								><i class="mdi mdi-plus-box-outline me-2"></i>填寫維護單</a
 							>
 						</li>
 						<li><hr class="dropdown-divider" /></li>
 						<li>
-							<a class="dropdown-item" href="/assets?status=maintenance"
+							<a
+								class="dropdown-item"
+								class:active={$page.url.pathname === '/assets' &&
+									$page.url.searchParams.get('status') === 'maintenance'}
+								href="/assets?status=maintenance"
 								><i class="mdi mdi-progress-wrench me-2"></i>待處理維護</a
 							>
 						</li>
 
 						<li>
-							<a class="dropdown-item" href="/maintenance/stats"
+							<a
+								class="dropdown-item"
+								class:active={$page.url.pathname === '/maintenance/stats'}
+								href="/maintenance/stats"
 								><i class="mdi mdi-finance me-2"></i>維護成本分析</a
 							>
 						</li>
@@ -129,6 +158,7 @@
 				<li class="nav-item dropdown">
 					<a
 						class="nav-link dropdown-toggle d-flex align-items-center"
+						class:active={$page.url.pathname === '/profile'}
 						href="#!"
 						id="userDropdown"
 						role="button"
@@ -151,7 +181,11 @@
 					</a>
 					<ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
 						<li>
-							<a class="dropdown-item" href="/profile">
+							<a
+								class="dropdown-item"
+								class:active={$page.url.pathname === '/profile'}
+								href="/profile"
+							>
 								<i class="mdi mdi-account me-2"></i>Profile
 							</a>
 						</li>

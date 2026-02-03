@@ -1,4 +1,4 @@
-import PocketBase from 'pocketbase/cjs';
+import PocketBase from 'pocketbase';
 
 // 動態設定 API URL，避免寫死域名和 SSR 問題
 // PocketBase 會自動在 base URL 後面加上 /api

@@ -1,132 +1,65 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import type { ListResult } from 'pocketbase';
+	import { page as pageStore } from '$app/stores';
+	import { navigating } from '$app/stores';
 	import Navbar from '$lib/components/Navbar.svelte';
-	import { logout } from '$lib/services/userService';
-	import { getBorrowRecords, type BorrowRecord } from '$lib/services/borrowService';
+    // [已移除] import { logout } ... (改由 Navbar 內部的 Form Action 處理)
 
 	let { data } = $props();
+
 	let currentUser = $derived(data.currentUser);
+	let recordsResult = $derived(data.recordsResult);
+	let currentViewMode = $derived(data.viewMode);
+	let currentFilterStatus = $derived(data.filterStatus);
+	let currentPage = $derived(data.page);
 
-	let recordsResult = $state<ListResult<BorrowRecord> | null>(null);
-	let loading = $state(true);
-	let error = $state<string | null>(null);
+	let isLoading = $derived(!!$navigating);
 
-	let viewModeManual = $state<'my' | 'all' | null>(null);
-	const defaultViewMode = $derived(
-		data.currentUser?.role?.includes('admin') ? 'all' : 'my'
-	);
-	let viewMode = $derived(viewModeManual ?? defaultViewMode);
+    // [已移除] function handleLogout() ...
 
-	$effect(() => {
-		// When user changes, reset the manual viewMode selection
-		data.currentUser;
-		viewModeManual = null;
-	});
-	let filterStatus = $state<'pending' | 'borrowed' | 'overdue' | 'returned' | ''>('borrowed');
-	let page = $state(1);
-	const perPage = 10; // Adjusted for better viewing
+	function updateQueryParams(newParams: { page?: number, status?: string, viewMode?: string }) {
+		const url = new URL($pageStore.url);
 
-	// A single, consolidated effect to handle all data fetching.
-	// This prevents the auto-cancellation error caused by multiple effects firing on init.
-	$effect(() => {
-		if (!currentUser) {
-			// If we know for sure they are logged out (initial data is null), redirect.
-			if (data.currentUser === null) {
-				goto('/login');
-			}
-			// Otherwise, just wait for currentUser to be populated.
-			return;
+		if (newParams.page !== undefined) {
+			url.searchParams.set('page', newParams.page.toString());
 		}
 
-		// This effect will now run once on load with the correct initial `viewMode`,
-		// and then re-run only when its dependencies (page, filterStatus, viewMode) change.
-		fetchRecords();
-	});
-
-	async function fetchRecords() {
-		loading = true;
-		error = null;
-		// Create a new AbortController for each request.
-		const controller = new AbortController();
-		const signal = controller.signal;
-
-		try {
-			if (!currentUser) return;
-
-			let filterParts: string[] = [];
-
-			if (filterStatus) {
-				filterParts.push(`status = "${filterStatus}"`);
-			}
-
-			// In admin 'all' mode, show all. In 'my' mode, show only user's.
-			// Non-admins are always in 'my' mode.
-			if (viewMode === 'my' || !currentUser?.role?.includes('admin')) {
-				filterParts.push(`user = "${currentUser.id}"`);
-			}
-
-			const result = await getBorrowRecords(
-				{
-					filter: filterParts.join(' && '),
-					page,
-					perPage,
-					sort: '-created', // Show newest first
-					expand: 'user,asset'
-				},
-				{ signal } // Pass the signal to the SDK
-			);
-			recordsResult = result as unknown as ListResult<BorrowRecord>;
-		} catch (err: any) {
-			if (err.name === 'AbortError' || err.name === 'ClientResponseError' && err.isAbort) {
-				// Don't set error for intentional cancellations
-				console.log('Request was intentionally aborted');
-			} else {
-				error = err.message || '無法載入借用記錄';
-			}
-		} finally {
-			// Only set loading to false if this wasn't an aborted request
-			// that is being superseded by a new one.
-			if (!signal.aborted) {
-				loading = false;
-			}
+		if (newParams.status !== undefined) {
+			if (newParams.status) url.searchParams.set('status', newParams.status);
+			else url.searchParams.delete('status');
 		}
-	}
 
-	function handleLogout() {
-		logout();
-		goto('/login');
+		if (newParams.viewMode !== undefined) {
+			url.searchParams.set('viewMode', newParams.viewMode);
+		}
+
+		goto(url, { keepFocus: true });
 	}
 
 	function toggleViewMode() {
-		page = 1; // Reset to first page
-		viewModeManual = viewMode === 'my' ? 'all' : 'my';
+		const newMode = currentViewMode === 'my' ? 'all' : 'my';
+		updateQueryParams({ viewMode: newMode, page: 1 });
 	}
 
-	function handleFilterChange() {
-		page = 1; // Reset to first page
+	function handleFilterChange(event: Event) {
+		const select = event.currentTarget as HTMLSelectElement;
+		updateQueryParams({ status: select.value, page: 1 });
 	}
 
 	function goToPage(newPage: number) {
 		if (!recordsResult) return;
 		if (newPage > 0 && newPage <= recordsResult.totalPages) {
-			page = newPage;
-			fetchRecords();
+			updateQueryParams({ page: newPage });
 		}
 	}
 
 	function getStatusClass(status: string) {
 		switch (status) {
-			case 'borrowed':
-				return 'bg-primary';
-			case 'pending':
-				return 'bg-warning text-dark';
-			case 'overdue':
-				return 'bg-danger';
-			case 'returned':
-				return 'bg-success';
-			default:
-				return 'bg-secondary';
+			case 'borrowed': return 'bg-primary';
+			case 'pending': return 'bg-warning text-dark';
+			case 'overdue': return 'bg-danger';
+			case 'returned': return 'bg-success';
+			default: return 'bg-secondary';
 		}
 	}
 </script>
@@ -137,7 +70,7 @@
 
 <div class="min-vh-100 pb-5">
 	<div class="container-fluid px-4">
-		<Navbar {handleLogout} {currentUser} />
+		<Navbar/>
 
 		<div class="card shadow-sm bg-white bg-opacity-90">
 			<div class="card-header bg-white bg-opacity-90 py-3 d-flex justify-content-between align-items-center">
@@ -146,16 +79,24 @@
 				</h5>
                 <div class="d-flex gap-2">
                     {#if currentUser?.role?.includes('admin')}
-                    <button class="btn btn-sm btn-outline-secondary" onclick={toggleViewMode} title={viewMode === 'all' ? '僅顯示我的記錄' : '顯示所有記錄'}>
-                        {#if viewMode === 'all'}
-                            <i class="mdi mdi-account-outline me-1"></i>我的
-                        {:else}
-                            <i class="mdi mdi-account-group-outline me-1"></i>全部
-                        {/if}
-                    </button>
+						<button
+							class="btn btn-sm btn-outline-secondary"
+							onclick={toggleViewMode}
+							title={currentViewMode === 'all' ? '僅顯示我的記錄' : '顯示所有記錄'}
+						>
+							{#if currentViewMode === 'all'}
+								<i class="mdi mdi-account-outline me-1"></i>我的
+							{:else}
+								<i class="mdi mdi-account-group-outline me-1"></i>全部
+							{/if}
+						</button>
                     {/if}
                     <div style="width: 150px;">
-                        <select class="form-select form-select-sm" bind:value={filterStatus} onchange={handleFilterChange}>
+                        <select
+							class="form-select form-select-sm"
+							value={currentFilterStatus}
+							onchange={handleFilterChange}
+						>
                             <option value="">所有狀態</option>
                             <option value="pending">待審核</option>
                             <option value="borrowed">借用中</option>
@@ -167,22 +108,18 @@
 			</div>
 
 			<div class="card-body p-4">
-				{#if loading}
+				{#if isLoading}
 					<div class="text-center py-5">
 						<div class="spinner-border text-primary" role="status">
 							<span class="visually-hidden">載入中...</span>
 						</div>
 						<p class="mt-2">載入記錄中...</p>
 					</div>
-				{:else if error}
-					<div class="alert alert-danger">
-						<i class="mdi mdi-alert-circle-outline me-2"></i>{error}
-					</div>
 				{:else if !recordsResult || recordsResult.items.length === 0}
 					<div class="alert alert-info text-center">
 						<p class="mb-2"><i class="mdi mdi-information-outline mdi-24px"></i></p>
 						找不到任何借用記錄。
-						{#if !filterStatus}
+						{#if !currentFilterStatus}
 							<a href="/assets" class="alert-link fw-bold">前往資產列表</a> 看看有什麼可以借用。
 						{/if}
 					</div>
@@ -191,7 +128,7 @@
 						<table class="table table-hover align-middle">
 							<thead class="table-light">
 								<tr>
-									{#if viewMode === 'all' && currentUser?.role?.includes('admin')}
+									{#if currentViewMode === 'all' && currentUser?.role?.includes('admin')}
 										<th>借用人</th>
 									{/if}
 									<th>資產名稱</th>
@@ -202,12 +139,12 @@
 								</tr>
 							</thead>
 							<tbody>
-								{#each recordsResult.items as borrow}
+								{#each recordsResult.items as borrow (borrow.id)}
 									<tr
 										class:table-warning={borrow.status === 'pending'}
 										class:table-danger={borrow.status === 'overdue'}
 									>
-										{#if viewMode === 'all' && currentUser?.role?.includes('admin')}
+										{#if currentViewMode === 'all' && currentUser?.role?.includes('admin')}
 											<td>{borrow.expand?.user?.name || borrow.expand?.user?.email}</td>
 										{/if}
 										<td>
@@ -232,7 +169,6 @@
 						</table>
 					</div>
 
-					<!-- Pagination -->
 					<div class="d-flex justify-content-between align-items-center mt-4">
 						<div>
 							<small class="text-muted">
@@ -241,23 +177,41 @@
 						</div>
 						<nav>
 							<ul class="pagination pagination-sm mb-0">
-								<li class="page-item" class:disabled={!recordsResult || page <= 1}>
-									<button class="page-link" onclick={() => goToPage(1)} disabled={!recordsResult || page <= 1} title="第一頁">
+								<li class="page-item" class:disabled={currentPage <= 1}>
+									<button
+										class="page-link"
+										onclick={() => goToPage(1)}
+										disabled={currentPage <= 1}
+										title="第一頁"
+									>
 										<i class="mdi mdi-page-first"></i>
 									</button>
 								</li>
-								<li class="page-item" class:disabled={!recordsResult || page <= 1}>
-									<button class="page-link" onclick={() => goToPage(page - 1)} disabled={!recordsResult || page <= 1}>
+								<li class="page-item" class:disabled={currentPage <= 1}>
+									<button
+										class="page-link"
+										onclick={() => goToPage(currentPage - 1)}
+										disabled={currentPage <= 1}
+									>
 										上一頁
 									</button>
 								</li>
-								<li class="page-item" class:disabled={!recordsResult || page >= recordsResult.totalPages}>
-									<button class="page-link" onclick={() => goToPage(page + 1)} disabled={!recordsResult || page >= recordsResult.totalPages}>
+								<li class="page-item" class:disabled={currentPage >= recordsResult.totalPages}>
+									<button
+										class="page-link"
+										onclick={() => goToPage(currentPage + 1)}
+										disabled={currentPage >= recordsResult.totalPages}
+									>
 										下一頁
 									</button>
 								</li>
-								<li class="page-item" class:disabled={!recordsResult || page >= recordsResult.totalPages}>
-									<button class="page-link" onclick={() => { if (recordsResult) goToPage(recordsResult.totalPages); }} disabled={!recordsResult || page >= recordsResult.totalPages} title="最後一頁">
+								<li class="page-item" class:disabled={currentPage >= recordsResult.totalPages}>
+									<button
+										class="page-link"
+										onclick={() => goToPage(recordsResult.totalPages)}
+										disabled={currentPage >= recordsResult.totalPages}
+										title="最後一頁"
+									>
 										<i class="mdi mdi-page-last"></i>
 									</button>
 								</li>

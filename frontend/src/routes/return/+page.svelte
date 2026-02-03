@@ -1,82 +1,32 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
-	import {
-		returnAsset,
-		getCurrentBorrowedAssets,
-		getActiveBorrowRecordForAsset,
-		type BorrowRecord
-	} from '$lib/services/borrowService';
+	import { enhance } from '$app/forms';
+	import { untrack } from 'svelte'; // [NEW] 引入 untrack
 	import Navbar from '$lib/components/Navbar.svelte';
-	import { logout } from '$lib/services/userService';
 
-	let { data } = $props();
+	let { data, form } = $props();
+
 	let currentUser = $derived(data.currentUser);
+	let borrowedAssets = $derived(data.borrowedAssets);
+	let serverError = $derived(data.error);
+	let assetIdFromQuery = $derived(data.assetIdFromQuery);
 
-	let borrowedAssets = $state<BorrowRecord[]>([]);
-	let selectedRecordId = $state<string | null>(null);
-	let returnImages = $state<FileList | null>(null);
-	let loading = $state(true);
-	let submitting = $state(false);
-	let error = $state<string | null>(null);
+	// [FIX] 使用 untrack 包裹初始值邏輯，消除 "state_referenced_locally" 警告
+	// 這明確告訴編譯器：我們只在初始化時讀取這些值一次
+	let selectedRecordId = $state(
+		untrack(() => form?.selectedRecordId || data.selectedRecordId || '')
+	);
 
-	const assetIdFromQuery = $derived($page.url.searchParams.get('assetId'));
-	let isFromQuery = $derived(!!assetIdFromQuery);
-
+	// [NEW] 使用 $effect 確保當 form (提交結果) 或 data (網址參數) 改變時，
+	// selectedRecordId 會跟著更新 (例如：從別的頁面導航過來，或提交失敗後)
 	$effect(() => {
-		if (!currentUser) {
-			goto('/login');
-			return;
+		const incomingId = form?.selectedRecordId || data.selectedRecordId;
+		if (incomingId) {
+			selectedRecordId = incomingId;
 		}
-
-		async function loadData() {
-			try {
-				loading = true;
-				if (assetIdFromQuery) {
-					const record = await getActiveBorrowRecordForAsset(assetIdFromQuery);
-					borrowedAssets = [record];
-					selectedRecordId = record.id;
-				} else {
-					const result = await getCurrentBorrowedAssets();
-					borrowedAssets = result.items as unknown as BorrowRecord[];
-				}
-
-				if (borrowedAssets.length === 0) {
-					error = '找不到可歸還的資產。';
-				}
-			} catch (err: any) {
-				error = err.message || '無法載入借用資料';
-			} finally {
-				loading = false;
-			}
-		}
-
-		loadData();
 	});
 
-	async function handleSubmit() {
-		if (!selectedRecordId) {
-			alert('請選擇要歸還的資產');
-			return;
-		}
-
-		submitting = true;
-		try {
-			await returnAsset(selectedRecordId, returnImages || undefined);
-			alert('資產歸還成功！');
-			goto('/borrow/list');
-		} catch (err: any) {
-			error = err.message || '歸還資產失敗';
-			alert('歸還失敗: ' + error);
-		} finally {
-			submitting = false;
-		}
-	}
-
-	function handleLogout() {
-		logout();
-		goto('/login');
-	}
+	let submitting = $state(false);
+	let displayError = $derived(form?.message || serverError);
 </script>
 
 <svelte:head>
@@ -85,7 +35,8 @@
 
 <div class="min-vh-100 pb-5">
 	<div class="container-fluid px-4">
-		<Navbar {handleLogout} {currentUser} />
+		<Navbar />
+
 		<div class="card shadow-sm mt-4">
 			<div class="card-header bg-white py-3">
 				<h4 class="mb-0 card-title"><i class="mdi mdi-undo-variant me-2"></i>歸還資產</h4>
@@ -93,42 +44,62 @@
 			<div class="card-body">
 				<div class="row justify-content-center">
 					<div class="col-lg-8 col-xl-6">
-						{#if loading}
-							<div class="text-center py-5">
-								<div class="spinner-border text-primary" role="status">
-									<span class="visually-hidden">Loading...</span>
+						{#if displayError}
+							<div class="alert alert-danger alert-dismissible fade show" role="alert">
+								<i class="mdi mdi-alert-circle me-2"></i>{displayError}
+								<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+							</div>
+						{/if}
+
+						{#if !borrowedAssets || borrowedAssets.length === 0}
+							<div class="alert alert-warning text-center">
+								<p class="mb-2"><i class="mdi mdi-information-outline mdi-24px"></i></p>
+								目前沒有可歸還的資產。
+								<div class="mt-3">
+									<a href="/borrow/list" class="btn btn-outline-secondary">查看借用記錄</a>
 								</div>
 							</div>
-						{:else if error}
-							<div class="alert alert-danger">{error}</div>
-							<a href="/borrow/list" class="btn btn-secondary">返回列表</a>
 						{:else}
-							<form onsubmit={handleSubmit}>
+							<form
+								method="POST"
+								enctype="multipart/form-data"
+								use:enhance={() => {
+									submitting = true;
+									return async ({ update }) => {
+										await update(); // 等待 Server 回應並更新頁面
+										submitting = false;
+									};
+								}}
+							>
 								<div class="mb-3">
 									<label for="assetSelect" class="form-label fw-bold">要歸還的資產</label>
 									<select
 										id="assetSelect"
+										name="recordId"
 										class="form-select"
 										bind:value={selectedRecordId}
 										required
-										disabled={isFromQuery}
+										disabled={!!assetIdFromQuery}
 									>
-										{#if !isFromQuery}
-											<option value={null} disabled>請選擇...</option>
+										{#if !assetIdFromQuery}
+											<option value="" disabled selected>請選擇...</option>
 										{/if}
 										{#each borrowedAssets as record}
 											<option value={record.id}>
-												{record.expand?.asset?.name} (應於 {new Date(
-													record.expected_return_date
-												).toLocaleDateString()} 歸還)
+												{record.expand?.asset?.name}
+												(應還: {new Date(record.expected_return_date).toLocaleDateString()})
 											</option>
 										{/each}
 									</select>
-									{#if isFromQuery && borrowedAssets[0]}
-										<div class="form-text">
-											由 {borrowedAssets[0].expand?.user?.name ||
-												borrowedAssets[0].expand?.user?.email} 借用
-										</div>
+
+									{#if assetIdFromQuery}
+										<input type="hidden" name="recordId" value={selectedRecordId} />
+										{#if borrowedAssets[0]}
+											<div class="form-text">
+												<i class="mdi mdi-account me-1"></i>
+												借用人: {borrowedAssets[0].expand?.user?.name || borrowedAssets[0].expand?.user?.email}
+											</div>
+										{/if}
 									{/if}
 								</div>
 
@@ -138,9 +109,9 @@
 										type="file"
 										class="form-control"
 										id="images"
+										name="returnImages"
 										accept="image/*"
 										multiple
-										onchange={(e) => (returnImages = e.currentTarget.files)}
 									/>
 									<div class="form-text">建議拍攝資產歸還時的狀況，以保障雙方權益。</div>
 								</div>
