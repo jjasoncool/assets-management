@@ -39,7 +39,7 @@
 
 		<div class="card shadow-sm mt-4">
 			<div class="card-header bg-white py-3">
-				<h4 class="mb-0 card-title"><i class="mdi mdi-undo-variant me-2"></i>歸還資產</h4>
+				<h5 class="mb-0 card-title fw-bold"><i class="mdi mdi-undo-variant me-2"></i>歸還資產</h5>
 			</div>
 			<div class="card-body">
 				<div class="row justify-content-center">

@@ -73,7 +73,8 @@
 				<li class="nav-item dropdown">
 					<a
 						class="nav-link dropdown-toggle"
-						class:active={$page.url.pathname.startsWith('/borrow') || $page.url.pathname === '/return'}
+						class:active={$page.url.pathname.startsWith('/borrow') ||
+							$page.url.pathname === '/return'}
 						href="#!"
 						id="borrowDropdown"
 						role="button"
@@ -104,8 +105,7 @@
 				<li class="nav-item dropdown">
 					<a
 						class="nav-link dropdown-toggle"
-						class:active={$page.url.pathname.startsWith('/maintenance') ||
-							($page.url.pathname === '/assets' && $page.url.searchParams.get('status') === 'maintenance')}
+						class:active={$page.url.pathname.startsWith('/maintenance')}
 						href="#!"
 						id="maintenanceDropdown"
 						role="button"
@@ -118,7 +118,7 @@
 						<li>
 							<a
 								class="dropdown-item"
-								class:active={$page.url.pathname === '/maintenance' && !$page.url.search}
+								class:active={$page.url.pathname === '/maintenance'}
 								href="/maintenance"
 								><i class="mdi mdi-history me-2"></i>維護紀錄總覽</a
 							>
@@ -135,13 +135,12 @@
 						<li>
 							<a
 								class="dropdown-item"
-								class:active={$page.url.pathname === '/assets' &&
-									$page.url.searchParams.get('status') === 'maintenance'}
-								href="/assets?status=maintenance"
-								><i class="mdi mdi-progress-wrench me-2"></i>待處理維護</a
+								class:active={$page.url.pathname === '/maintenance/in-progress'}
+								href="/maintenance/in-progress"
 							>
+								<i class="mdi mdi-progress-wrench me-2"></i>維修進行中
+							</a>
 						</li>
-
 						<li>
 							<a
 								class="dropdown-item"

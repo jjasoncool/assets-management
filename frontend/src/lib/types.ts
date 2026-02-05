@@ -1,3 +1,14 @@
+// src/lib/types.ts
+
+// [新增] Service 需要的 Enum
+export enum Collections {
+  Assets = 'assets',
+  MaintenanceRecords = 'maintenance_records',
+  Users = 'users',
+  AssetCategories = 'asset_categories',
+  BorrowRecords = 'borrow_records'
+}
+
 // 1. Asset 相關
 export interface AssetCategory {
   id: string;
@@ -20,15 +31,16 @@ export interface Asset {
   purchase_price?: number;
   warranty_years?: number;
   location?: string;
-  department?: string;
-  // 注意：這裡定義的是 PocketBase 回傳的結構
-  // 如果有 expand，這裡可能會是物件；如果沒有，則是 ID 字串
+  department?: string; // 保留您的欄位
+
+  // 結構維持您原本的寫法
   category?: AssetCategory | string;
   assigned_to?: {
     id: string;
     name?: string;
     email: string;
   } | string;
+
   images?: string[];
   confidentiality_score?: number;
   integrity_score?: number;
@@ -41,6 +53,31 @@ export interface Asset {
   updated: string;
 }
 
+// [新增] 維護紀錄介面
+export interface MaintenanceRecord {
+  id: string;
+  asset: string;
+  maintenance_date: string;
+  maintenance_type: 'preventive' | 'corrective' | 'inspection';
+  cost: number;
+  performed_by?: string;
+  description?: string;
+  maintenance_images?: string[];
+  created: string;
+  updated: string;
+
+  expand?: {
+    asset?: Asset;
+    performed_by?: {
+      id: string;
+      name?: string;
+      email: string;
+      avatar?: string;
+    };
+  };
+}
+
+// 2. Borrow 相關
 export interface BorrowRecord {
   id: string;
   asset: string;

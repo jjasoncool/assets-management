@@ -78,7 +78,7 @@
     <div class="container-fluid px-4">
         <Navbar />
 
-        <div class="card shadow-sm bg-white bg-opacity-90">
+        <div class="card shadow-sm bg-white bg-opacity-90 mt-4">
             <div class="card-header bg-white bg-opacity-90 py-3">
                 <h5 class="card-title mb-0 fw-bold">資產類別管理</h5>
             </div>

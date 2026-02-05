@@ -72,7 +72,7 @@
 	<div class="container-fluid px-4">
 		<Navbar/>
 
-		<div class="card shadow-sm bg-white bg-opacity-90">
+		<div class="card shadow-sm bg-white bg-opacity-90 mt-4">
 			<div class="card-header bg-white bg-opacity-90 py-3 d-flex justify-content-between align-items-center">
 				<h5 class="card-title mb-0 fw-bold">
 					<i class="mdi mdi-format-list-checks me-2"></i>借還記錄
