@@ -1,117 +1,156 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
-    // 移除錯誤的 service 引用
-    import Navbar from '$lib/components/Navbar.svelte';
-    import Footer from '$lib/components/Footer.svelte';
+	import { onMount, untrack } from 'svelte';
+	import Navbar from '$lib/components/Navbar.svelte';
+	import Footer from '$lib/components/Footer.svelte';
+	import type { RecordModel } from 'pocketbase';
 
-    // FullCalendar 相關
-    import { Calendar } from '@fullcalendar/core';
-    import dayGridPlugin from '@fullcalendar/daygrid';
-    import timeGridPlugin from '@fullcalendar/timegrid';
-    import interactionPlugin from '@fullcalendar/interaction';
+	// FullCalendar 相關
+	import { Calendar } from '@fullcalendar/core';
+	import dayGridPlugin from '@fullcalendar/daygrid';
+	import timeGridPlugin from '@fullcalendar/timegrid';
+	import interactionPlugin from '@fullcalendar/interaction';
 
-    // 1. 接收 Server 資料 (Svelte 5)
-    let { data } = $props();
+	let { data } = $props();
 
-    // 2. 建立響應式變數
-    let currentUser = $derived(data?.currentUser);
+	// ==========================================
+	// 1. 狀態管理 (Svelte 5)
+	// ==========================================
 
-    // 3. 資料轉換：將 Server 的 snake_case 轉回您原本 UI 用的 camelCase
-    // 這樣下方的 HTML 結構完全不用改
-    let borrowRecords = $derived((data?.borrowRecords || []).map((r: any) => ({
-        id: r.id,
-        assetId: r.asset, // Server 是 asset (ID)
-        userId: r.user,   // Server 是 user (ID)
-        borrowDate: r.borrow_date,
-        expectedReturnDate: r.expected_return_date,
-        actualReturnDate: r.actual_return_date,
-        status: r.status,
-        notes: r.notes, // 假設後端有這欄位
-        created: r.created,
-        updated: r.updated,
-        // 處理 expand 關聯資料
-        asset: {
-            name: r.expand?.asset?.name || '未知物品',
-            asset_id: r.expand?.asset?.asset_id,
-            brand: r.expand?.asset?.brand,
-            model: r.expand?.asset?.model
-        },
-        user: {
-            name: r.expand?.user?.name,
-            email: r.expand?.user?.email
-        }
-    })));
+	// (A) 原始資料倉儲：儲存從 API 抓回來的所有資料 (可能包含整個月)
+	// 這裡只負責存，不負責過濾顯示
+	let rawRecords = $state<RecordModel[]>(
+		untrack(() => (data as any)?.borrowRecords || [])
+	);
 
-    let calendar: Calendar;
+	// (B) 目前檢視的時間範圍：預設為當天，會被 datesSet 更新
+	let currentViewRange = $state({
+		start: new Date(),
+		end: new Date()
+	});
 
-    onMount(() => {
-        // 等待 DOM 渲染
-        setTimeout(() => {
-            const calendarEl = document.getElementById('calendar');
-            if (calendarEl) {
-                calendar = new Calendar(calendarEl, {
-                    plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
-                    initialView: 'dayGridMonth',
-                    headerToolbar: {
-                        left: 'prev,next today',
-                        center: 'title',
-                        right: 'dayGridMonth,timeGridWeek,timeGridDay'
-                    },
-                    height: 'auto',
-                    events: borrowRecords.map((record: any) => ({
-                        title: `${record.asset?.name || '未知物品'} (${record.user?.email || '未知用戶'})`,
-                        start: record.borrowDate,
-                        end: record.actualReturnDate || record.expectedReturnDate,
-                        color: record.status === 'borrowed' ? '#dc3545' : '#28a745',
-                        textColor: '#ffffff'
-                    }))
-                });
-                calendar.render();
-            }
-        }, 100);
-    });
+	// (C) 過濾後的清單：側邊欄真正要顯示的資料 ($derived 自動計算)
+	// 邏輯：當 rawRecords 更新 或 currentViewRange 改變時，這裡會自動重算
+	let filteredSideList = $derived(
+		rawRecords.filter(record => {
+			const recordStart = new Date(record.borrow_date);
+			// 如果有實際歸還日用實際的，沒有則用預計的
+			const recordEnd = new Date(record.actual_return_date || record.expected_return_date);
 
+			// **核心過濾邏輯：判斷時間重疊 (Overlap)**
+			// 借用時段 與 檢視時段 是否有交集？
+			// 公式：(活動開始 < 檢視結束) && (活動結束 > 檢視開始)
+			return recordStart < currentViewRange.end && recordEnd > currentViewRange.start;
+		})
+	);
+
+	// 使用 $effect 監聽 server data (SSR/導航回來時同步)
+	$effect(() => {
+		const serverRecords = (data as any)?.borrowRecords;
+		if (serverRecords) {
+			rawRecords = serverRecords;
+		}
+	});
+
+	let currentUser = $derived(data?.currentUser);
+	let calendar: Calendar;
+
+	onMount(() => {
+		const calendarEl = document.getElementById('calendar');
+		if (!calendarEl) return;
+
+		calendar = new Calendar(calendarEl, {
+			plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
+			initialView: 'dayGridMonth', // 預設月檢視
+			headerToolbar: {
+				left: 'prev,next today',
+				center: 'title',
+				right: 'dayGridMonth,timeGridWeek,timeGridDay' // 允許切換 月/週/日
+			},
+			height: 'auto',
+
+			// ==========================================
+			// 2. datesSet: 監聽視圖切換與日期變更
+			// ==========================================
+			// 當你切換到「日檢視」或按「下一週」時，這裡會告訴你當前看到的精確時間範圍
+			datesSet: (dateInfo) => {
+				console.log('👀 View changed:', dateInfo.view.type);
+				console.log('📅 Visible Range:', dateInfo.start, dateInfo.end);
+
+				// 更新狀態，觸發 $derived 重新過濾側邊欄
+				currentViewRange = {
+					start: dateInfo.start,
+					end: dateInfo.end
+				};
+			},
+
+			// ==========================================
+			// 3. events: 負責跟後端要資料
+			// ==========================================
+			events: (fetchInfo, successCallback, failureCallback) => {
+				const start = fetchInfo.startStr;
+				const end = fetchInfo.endStr;
+
+				// 注意：FullCalendar 為了快取，這裡的 fetchInfo 範圍通常比 datesSet 的範圍大
+				// 例如在日檢視下，這裡可能還是會抓整個月的資料
+				fetch(`/app-api/borrow-records?start=${start}&end=${end}`)
+					.then(r => r.ok ? r.json() : Promise.reject(r.statusText))
+					.then(records => {
+						// (A) 將抓回來的「大範圍」資料存入 rawRecords
+						rawRecords = records;
+
+						// (B) 轉換給行事曆顯示的小圓點
+						const calendarEvents = records.map((record: any) => ({
+							title: `${record.expand?.asset?.name || '未知'}`,
+							start: record.borrow_date,
+							end: record.actual_return_date || record.expected_return_date,
+							color: record.status === 'borrowed' ? '#dc3545' : '#28a745',
+							textColor: '#ffffff',
+							extendedProps: { user: record.expand?.user?.name }
+						}));
+
+						successCallback(calendarEvents);
+					})
+					.catch(error => {
+						console.error(error);
+						failureCallback(error);
+					});
+			}
+		});
+
+		calendar.render();
+	});
 </script>
-
-<svelte:head>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,400,600">
-</svelte:head>
 
 <div class="min-vh-100 pb-5">
     <div class="container-fluid px-4">
         <Navbar />
 
-        <!-- 登入狀態指示器 -->
-        <div class="alert alert-info mb-4">
-            <strong>登入狀態:</strong>
-            {#if currentUser}
-                <span class="text-success">已登入</span>
-                - 用戶: {currentUser.email || '未知'}
-            {:else}
-                <span class="text-danger">未登入</span>
-            {/if}
-            <br>
-            <small>API URL: {typeof window !== 'undefined' ? window.location.origin : 'SSR'}</small>
-        </div>
-
         <div class="row g-4">
-            <!-- 借用記錄區域 -->
             <div class="col-12 col-xl-4">
                 <div class="card shadow-sm bg-white bg-opacity-90 h-100">
-                    <div class="card-header bg-white bg-opacity-90">
-                        <h5 class="card-title mb-0 fw-bold">借用記錄</h5>
+                    <div class="card-header bg-white bg-opacity-90 d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0 fw-bold">清單檢視</h5>
+                        <span class="badge bg-secondary">
+                            {#if Math.abs(currentViewRange.end.getTime() - currentViewRange.start.getTime()) <= 86400000}
+                                當日
+                            {:else if Math.abs(currentViewRange.end.getTime() - currentViewRange.start.getTime()) <= 604800000}
+                                本週
+                            {:else}
+                                本月範圍
+                            {/if}
+                        </span>
                     </div>
-                    <div class="card-body">
-                        {#each borrowRecords.slice(0, 10) as record}
+                    <div class="card-body overflow-auto" style="max-height: 600px;">
+                        {#each filteredSideList as record}
                             <div class="d-flex justify-content-between align-items-start mb-3 pb-3 border-bottom">
                                 <div class="flex-grow-1">
-                                    <div class="fw-semibold">{record.asset?.name || '未知物品'}</div>
+                                    <div class="fw-semibold">{record.expand?.asset?.name || '未知物品'}</div>
                                     <div class="small text-muted">
-                                        借出: {new Date(record.borrowDate).toLocaleDateString('zh-TW')}
-                                        {#if record.actualReturnDate}
-                                            <br>歸還: {new Date(record.actualReturnDate).toLocaleDateString('zh-TW')}
-                                        {:else if record.expectedReturnDate}
-                                            <br>預計歸還: {new Date(record.expectedReturnDate).toLocaleDateString('zh-TW')}
+                                        借出: {new Date(record.borrow_date).toLocaleDateString('zh-TW')}
+                                        {#if record.actual_return_date}
+                                            <br>歸還: {new Date(record.actual_return_date).toLocaleDateString('zh-TW')}
+                                        {:else if record.expected_return_date}
+                                            <br>預計歸還: {new Date(record.expected_return_date).toLocaleDateString('zh-TW')}
                                         {/if}
                                     </div>
                                     <span class="badge {record.status === 'borrowed' ? 'text-bg-danger' : 'text-bg-success'} rounded-pill mt-1">
@@ -119,30 +158,23 @@
                                     </span>
                                 </div>
                             </div>
-                        {/each}
-                        {#if borrowRecords.length === 0}
+                        {:else}
                             <div class="text-center text-muted py-4">
-                                目前沒有借用記錄
+                                {#if rawRecords.length > 0}
+                                    此檢視範圍內無借用記錄
+                                {:else}
+                                    載入中或無資料...
+                                {/if}
                             </div>
-                        {/if}
+                        {/each}
                     </div>
                 </div>
             </div>
 
-            <!-- 行事曆區域 -->
             <div class="col-12 col-xl-8">
                 <div class="card shadow-sm bg-white bg-opacity-90 h-100">
-                    <div class="card-header bg-white bg-opacity-90">
-                        <h5 class="card-title mb-0 fw-bold">資產管理行事曆</h5>
-                    </div>
                     <div class="card-body">
                         <div id="calendar"></div>
-                        <div class="mt-3">
-                            <small class="text-muted">
-                                <span class="badge text-bg-danger me-2">紅色</span>借出中
-                                <span class="badge text-bg-success ms-3">綠色</span>已歸還
-                            </small>
-                        </div>
                     </div>
                 </div>
             </div>
