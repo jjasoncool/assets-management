@@ -58,6 +58,7 @@ export interface MaintenanceRecord {
   id: string;
   asset: string;
   maintenance_date: string;
+  complete_date?: string;
   maintenance_type: 'preventive' | 'corrective' | 'inspection';
   cost: number;
   performed_by?: string;

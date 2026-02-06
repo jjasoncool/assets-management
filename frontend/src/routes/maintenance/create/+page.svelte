@@ -8,7 +8,13 @@
 	// [修正] 使用 $state() 來宣告響應式變數
 	let isSubmitting = $state(false);
 
-	// 定義維護類型選項 (對應 Schema)
+	// [新增] 過濾資產列表：僅允許狀態為 'active' 的資產進行維護
+	// 這樣可以排除 borrowed, lost, retired, maintenance 等狀態
+	let availableAssets = $derived(
+		(data.assets || []).filter((asset: any) => asset.status === 'active')
+	);
+
+	// 定義維護類型選項
 	const maintenanceTypes = [
 		{ value: 'preventive', label: '預防性維護 (Preventive)' },
 		{ value: 'corrective', label: '修復性維護 (Corrective)' },
@@ -61,13 +67,18 @@
 								<label for="asset" class="form-label fw-bold">選擇資產 <span class="text-danger">*</span></label>
 								<select class="form-select" id="asset" name="asset" required>
 									<option value="" disabled selected>請選擇要維護的資產...</option>
-									{#each data.assets as asset}
+
+									{#each availableAssets as asset}
 										<option value={asset.id}>
-											{asset.name} ({asset.asset_id}) - {asset.status}
+											{asset.name} ({asset.asset_id})
 										</option>
 									{/each}
+
+									{#if availableAssets.length === 0}
+										<option value="" disabled>沒有可用的 Active 資產</option>
+									{/if}
 								</select>
-								<div class="form-text">選擇清單中的資產進行維護紀錄。</div>
+								<div class="form-text">僅顯示狀態為 Active 的資產。</div>
 							</div>
 
 							<div class="mb-3">

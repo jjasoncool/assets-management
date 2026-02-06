@@ -1,6 +1,19 @@
 {
-  "typescript.preferences.includePackageJsonAutoImports": "auto",
-  "typescript.preferences.importModuleSpecifier": "relative",
-  "typescript.workspaceSymbols.excludeLibrarySymbols": false,
-  "typescript.preferences.preferTypeOnlyAutoImports": true
+    "typescript.preferences.includePackageJsonAutoImports": "auto",
+    "typescript.preferences.importModuleSpecifier": "relative",
+    "typescript.workspaceSymbols.excludeLibrarySymbols": false,
+    "typescript.preferences.preferTypeOnlyAutoImports": true,
+    // 核心設定：按 Tab 時插入空格
+    "editor.insertSpaces": true,
+    // 設定一個 Tab 等於 4 個空格
+    "editor.tabSize": 4,
+
+    // 自動偵測：建議關閉，避免它根據舊檔案自動切換回 Tab
+    "editor.detectIndentation": false,
+    "files.trimTrailingWhitespace": true, // 自動刪除行尾沒用的空白
+    "files.insertFinalNewline": true, // 存檔時自動在檔案最後插入一個空白行
+    "files.trimFinalNewlines": true, // 如果最後有好幾行空白，自動刪成剩一行
+    "[svelte]": {
+        "editor.defaultFormatter": "svelte.svelte-vscode"
+    }
 }
