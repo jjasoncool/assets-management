@@ -75,29 +75,33 @@
 									}}
 								>
 									<div class="input-group">
-										<label for="email" class="col-xl-4 col-lg-4 col-md-4 col-sm-5 col-form-label"
+										<label
+											for="email"
+											class="col-xl-4 col-lg-4 col-md-4 col-form-label d-none d-md-block"
 											>Email</label
 										>
 										<input
 											name="email"
 											type="email"
-											class="form-control validate col-xl-9 col-lg-8 col-md-8 col-sm-7"
+											class="form-control validate col-12 col-md-8 col-lg-8 col-xl-9"
 											id="email"
 											value={form?.email ?? ''}
+											placeholder="Email"
 											required
 										/>
 									</div>
 									<div class="input-group mt-3">
 										<label
 											for="password"
-											class="col-xl-4 col-lg-4 col-md-4 col-sm-5 col-form-label"
+											class="col-xl-4 col-lg-4 col-md-4 col-form-label d-none d-md-block"
 											>Password</label
 										>
 										<input
 											name="password"
 											type="password"
-											class="form-control validate"
+											class="form-control validate col-12 col-md-8 col-lg-8 col-xl-8"
 											id="password"
+											placeholder="Password"
 											required
 										/>
 									</div>

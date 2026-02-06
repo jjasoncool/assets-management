@@ -3,6 +3,7 @@
     import '../styles/tooplate.css';
     import 'bootstrap/dist/css/bootstrap.min.css';
     import '@mdi/font/css/materialdesignicons.min.css';
+    import 'tom-select/dist/css/tom-select.bootstrap5.css';
 
     import { onMount } from 'svelte';
     import { browser } from '$app/environment';

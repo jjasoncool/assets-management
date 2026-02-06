@@ -1,7 +1,11 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { untrack } from 'svelte'; // [NEW] 引入 untrack
+	import { untrack } from 'svelte';
 	import Navbar from '$lib/components/Navbar.svelte';
+	import { onMount, onDestroy } from 'svelte';
+	import { Html5QrcodeScanner } from 'html5-qrcode';
+	import TomSelect from 'tom-select';
+	import type { BorrowRecord } from '$lib/types';
 
 	let { data, form } = $props();
 
@@ -10,14 +14,10 @@
 	let serverError = $derived(data.error);
 	let assetIdFromQuery = $derived(data.assetIdFromQuery);
 
-	// [FIX] 使用 untrack 包裹初始值邏輯，消除 "state_referenced_locally" 警告
-	// 這明確告訴編譯器：我們只在初始化時讀取這些值一次
 	let selectedRecordId = $state(
 		untrack(() => form?.selectedRecordId || data.selectedRecordId || '')
 	);
 
-	// [NEW] 使用 $effect 確保當 form (提交結果) 或 data (網址參數) 改變時，
-	// selectedRecordId 會跟著更新 (例如：從別的頁面導航過來，或提交失敗後)
 	$effect(() => {
 		const incomingId = form?.selectedRecordId || data.selectedRecordId;
 		if (incomingId) {
@@ -27,6 +27,112 @@
 
 	let submitting = $state(false);
 	let displayError = $derived(form?.message || serverError);
+
+	// --- Tom Select ---
+	let tomselect: TomSelect | null = null;
+	let tomselectEl: HTMLInputElement;
+
+	onMount(() => {
+		if (tomselectEl) {
+			tomselect = new TomSelect(tomselectEl, {
+				maxItems: 1,
+				options: borrowedAssets.map((record: BorrowRecord) => ({
+					value: record.id,
+					text: `${record.expand?.asset?.asset_id || 'N/A'} - ${record.expand?.asset?.name} (應還: ${new Date(
+						record.expected_return_date
+					).toLocaleDateString()})`
+				})),
+				create: false,
+				allowEmptyOption: true,
+				placeholder: assetIdFromQuery ? undefined : '請選擇或搜尋要歸還的資產...',
+				valueField: 'value',
+				labelField: 'text',
+				searchField: ['text'],
+				onChange: (value: string) => {
+					selectedRecordId = value;
+				}
+			});
+
+			if (selectedRecordId) {
+				tomselect.setValue(selectedRecordId, true); // silent=true, 不觸發 onchange
+			}
+
+			if (assetIdFromQuery) {
+				tomselect.disable();
+			}
+		}
+	});
+
+	// --- QR Scanner ---
+	let isScanning = $state(false);
+	let scanner: Html5QrcodeScanner | null = null;
+
+	function onScanSuccess(decodedText: string) {
+		console.log(`Code matched = ${decodedText}`);
+		if (scanner) {
+			scanner.clear().then(() => {
+				isScanning = false;
+				if (tomselect) {
+					// 將掃描到的文字（可能帶有 |）作為搜尋關鍵字
+					const searchText = decodedText.replace(/\|/g, ' ');
+					tomselect.setTextboxValue(searchText);
+					tomselect.open(); // 打開下拉選單顯示搜尋結果
+					tomselect.focus();
+				}
+			});
+		}
+	}
+
+	function onScanFailure(error: any) {
+		// 此回呼會頻繁觸發，我們不在此顯示錯誤，只在需要除錯時打開日誌
+		// console.warn(`Code scan error = ${error}`);
+	}
+
+	function startScan() {
+		isScanning = true;
+		// 使用 setTimeout 確保目標 <div> 已被渲染到 DOM 中
+		setTimeout(() => {
+			const readerElement = document.getElementById('qr-reader');
+			if (readerElement) {
+				scanner = new Html5QrcodeScanner(
+					'qr-reader',
+					{
+						fps: 10,
+						qrbox: { width: 250, height: 250 },
+						// @ts-ignore - facingMode is a valid experimental configuration
+						facingMode: 'environment'
+					},
+					/* verbose= */ false
+				);
+				scanner.render(onScanSuccess, onScanFailure);
+			}
+		}, 100);
+	}
+
+	function stopScan() {
+		if (scanner) {
+			scanner
+				.clear()
+				.then(() => {
+					isScanning = false;
+				})
+				.catch((error) => {
+					console.error('Failed to clear scanner.', error);
+					isScanning = false; // 確保UI狀態被更新
+				});
+		}
+	}
+
+	// 元件銷毀時，確保清理掃描器以釋放相機資源
+	onDestroy(() => {
+		if (scanner) {
+			scanner.clear().catch((err) => {
+				// It might fail if camera is already released, which is fine on destroy
+				console.log('Ignoring scanner clear error on destroy:', err);
+			});
+		}
+		tomselect?.destroy();
+	});
 </script>
 
 <svelte:head>
@@ -60,6 +166,19 @@
 								</div>
 							</div>
 						{:else}
+							<div class="text-center mb-4 border-bottom pb-4">
+								{#if isScanning}
+									<div id="qr-reader" style="max-width: 500px; margin: auto; border-radius: 8px; overflow: hidden;"></div>
+									<button type="button" class="btn btn-outline-danger mt-3" onclick={stopScan}>
+										<i class="mdi mdi-close me-1"></i>取消掃描
+									</button>
+								{:else}
+									<button type="button" class="btn btn-info" onclick={startScan}>
+										<i class="mdi mdi-qrcode-scan me-1"></i>掃描資產 QR Code
+									</button>
+								{/if}
+							</div>
+
 							<form
 								method="POST"
 								enctype="multipart/form-data"
@@ -72,28 +191,18 @@
 								}}
 							>
 								<div class="mb-3">
-									<label for="assetSelect" class="form-label fw-bold">要歸還的資產</label>
-									<select
-										id="assetSelect"
+									<label for="tom-select-asset" class="form-label fw-bold">要歸還的資產</label>
+
+									<input
+										type="text"
+										id="tom-select-asset"
 										name="recordId"
-										class="form-select"
-										bind:value={selectedRecordId}
+										bind:this={tomselectEl}
 										required
 										disabled={!!assetIdFromQuery}
-									>
-										{#if !assetIdFromQuery}
-											<option value="" disabled selected>請選擇...</option>
-										{/if}
-										{#each borrowedAssets as record}
-											<option value={record.id}>
-												{record.expand?.asset?.name}
-												(應還: {new Date(record.expected_return_date).toLocaleDateString()})
-											</option>
-										{/each}
-									</select>
+									/>
 
 									{#if assetIdFromQuery}
-										<input type="hidden" name="recordId" value={selectedRecordId} />
 										{#if borrowedAssets[0]}
 											<div class="form-text">
 												<i class="mdi mdi-account me-1"></i>
