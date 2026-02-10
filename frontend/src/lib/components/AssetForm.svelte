@@ -15,6 +15,7 @@
 		users = [],        // 由 Server Load 傳入
 		categories = [],   // 由 Server Load 傳入
 		currentUser = undefined, // 接收 currentUser
+		fileToken = '',    // [新增] 接收 fileToken
 		onCancel
 	} = $props<{
 		mode: 'create' | 'edit',
@@ -23,6 +24,7 @@
 		users?: any[],
 		categories?: any[],
 		currentUser?: any,
+		fileToken?: string, // [新增]
 		onCancel?: () => void
 	}>();
 
@@ -170,8 +172,13 @@
 		formData.notes = assetData.notes || '';
 
 		if (assetData.images && Array.isArray(assetData.images)) {
+			// [修改] 使用 Token 組合 URL
+			const collectionId = assetData.collectionId || 'assets';
+			const recordId = assetData.id;
+			const tokenQuery = fileToken ? `?token=${fileToken}` : '';
+
 			existingImages = assetData.images.map((filename: string) => {
-				return pb.files.getURL(assetData, filename, { thumb: '200x200' });
+				return `/api/files/${collectionId}/${recordId}/${filename}${tokenQuery}`;
 			}).filter(Boolean);
 		}
 	}
@@ -221,6 +228,7 @@
 	}
 
 	function openImageModal(imageUrl: string) {
+		// [修改] 移除 ?thumb= 參數以便在 Modal 顯示原圖
 		modalImageUrl = imageUrl.includes('?thumb=') ? imageUrl.replace('?thumb=200x200', '') : imageUrl;
 	}
 
@@ -295,24 +303,38 @@
 
 		loading = true;
 
-		// 處理圖片上傳
+		// [修改] 處理圖片上傳 (原子化操作: 同時處理刪除與新增)
+
+		// 1. 強制移除 'images' 欄位，避免覆蓋(Replace)行為
+		formPayload.delete('images');
+		formPayload.delete('images+'); // 預防性清除
+		// 不需要刪除 'images-'，因為我們要 append 它
+
+		// 2. 處理待刪除的圖片 (僅在編輯模式)
+		if (mode === 'edit' && imagesToDelete.length > 0) {
+			for (const filename of imagesToDelete) {
+				// 使用 'images-' 告訴 PocketBase 移除這些特定檔案
+				formPayload.append('images-', filename);
+			}
+		}
+
+		// 3. 處理新增的圖片
 		if (imageFiles.length > 0) {
-			// 清除可能存在的空欄位，避免重複
-			formPayload.delete('images');
+			// 編輯模式用 'images+' (附加)，新增模式用 'images' (設定)
+			const imageField = mode === 'edit' ? 'images+' : 'images';
 			for (const file of imageFiles) {
-				formPayload.append('images', file);
+				formPayload.append(imageField, file);
 			}
 		}
 
 		// 確保數值欄位正確傳遞 (避免 undefined)
 		if (formData.purchase_price !== undefined) formPayload.set('purchase_price', formData.purchase_price.toString());
-        if (formData.confidentiality_score !== undefined) formPayload.set('confidentiality_score', formData.confidentiality_score.toString());
+		if (formData.confidentiality_score !== undefined) formPayload.set('confidentiality_score', formData.confidentiality_score.toString());
         if (formData.integrity_score !== undefined) formPayload.set('integrity_score', formData.integrity_score.toString());
         if (formData.availability_score !== undefined) formPayload.set('availability_score', formData.availability_score.toString());
 
 		return async ({ result, update }) => {
 			loading = false;
-
 			// 攔截 redirect (新增成功) 或 success (編輯成功)
 			// 先顯示 SweetAlert，再執行 update() 讓 SvelteKit 進行跳轉或更新頁面
 			if (result.type === 'redirect' || result.type === 'success') {
@@ -335,10 +357,6 @@
     {#if mode === 'edit' && assetData?.id}
 		<input type="hidden" name="id" value={assetData.id} />
 	{/if}
-
-	{#each imagesToDelete as filename}
-		<input type="hidden" name="deleted_images" value={filename} />
-	{/each}
 
 	<input type="hidden" name="total_risk_score" value={totalRiskScore} />
 
@@ -714,7 +732,6 @@
 	</div>
 </form>
 
-<!-- Modals (unchanged) -->
 <div class="modal fade" id="imagePreviewModal" tabindex="-1" aria-labelledby="imagePreviewModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">

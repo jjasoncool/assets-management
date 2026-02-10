@@ -45,7 +45,6 @@
         modal?.show();
 
         try {
-            // 修正：使用 /app-api 路徑
             const res = await fetch('/app-api/file-token');
             if (res.ok) {
                 const data = await res.json();
@@ -56,17 +55,6 @@
         } catch (err) {
             console.error('獲取 Token 失敗:', err);
         }
-    }
-
-    /**
-     * Action: 關閉 Modal
-     */
-    function closeRecordModal() {
-        modal?.hide();
-        // 延遲清空數據，讓 Modal 動畫能跑完
-        setTimeout(() => {
-            selectedRecord = null;
-        }, 300);
     }
 
     /**

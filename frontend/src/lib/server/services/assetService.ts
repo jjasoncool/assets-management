@@ -64,12 +64,13 @@ export async function createAsset(pb: PocketBase, data: Omit<Asset, 'id' | 'crea
 }
 
 /**
- * 更新現有資產
+ * [修正] 更新現有資產
+ * 支援傳入 FormData 以處理圖片上傳
  */
-export async function updateAsset(pb: PocketBase, id: string, data: Partial<Omit<Asset, 'id' | 'created' | 'updated'>>) {
+export async function updateAsset(pb: PocketBase, id: string, data: Partial<Omit<Asset, 'id' | 'created' | 'updated'>> | FormData) {
   try {
     const record = await pb.collection('assets').update(id, data);
-    logger.log(`資產 ${id} 更新成功:`, record);
+    logger.log(`資產 ${id} 更新成功:`, record.id);
     return record as unknown as Asset;
   } catch (error) {
     logger.error(`更新資產 ${id} 失敗:`, error);
@@ -117,7 +118,7 @@ export async function searchAssets(pb: PocketBase, query: string, page = 1) {
  * 創建資產並自動生成 asset_id，處理並發重試
  */
 export async function createAssetWithIdGeneration(
-  pb: PocketBase, // 注入 pb
+  pb: PocketBase,
   formDataObj: FormData,
   categoryId: string,
   categories: AssetCategory[]
@@ -144,8 +145,7 @@ export async function createAssetWithIdGeneration(
                     logger.warn('更新資產類別序號失敗 (但資產已成功創建):', updateError);
                 }
             }
-
-            return createdAsset; // 成功
+            return createdAsset;
         } catch (error: any) {
             lastError = error;
             // 檢查是否為唯一性衝突 (asset_id 重複)
@@ -156,11 +156,10 @@ export async function createAssetWithIdGeneration(
                     await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 300));
                 }
             } else {
-                throw error; // 立即重新拋出其他錯誤
+                throw error;
             }
         }
     }
-
     throw lastError || new Error('多次重試後創建資產失敗');
 }
 
@@ -227,7 +226,6 @@ export async function generateAssetId(pb: PocketBase, categoryId: string, catego
     throw error;
   }
 }
-
 
 // =================================================================
 // 資產類別函式

@@ -2,7 +2,6 @@
     import { goto } from '$app/navigation';
     import Navbar from '$lib/components/Navbar.svelte';
     import AssetForm from '$lib/components/AssetForm.svelte';
-
     // 接收 Server Load 的資料 (data.asset 等) 與 Action 結果 (form)
     let { data, form } = $props();
 </script>
@@ -27,6 +26,7 @@
                 users={data.borrowableUsers}
                 categories={data.categories}
                 currentUser={data.currentUser}
+                fileToken={data.fileToken}
                 onCancel={() => goto('/assets')}
             />
         </div>

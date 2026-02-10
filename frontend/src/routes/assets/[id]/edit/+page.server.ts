@@ -1,7 +1,6 @@
 import { fail, redirect, error } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
-// 引入 getAssetFormOptions
-import { getAsset, getAssetFormOptions } from '$lib/server/services/assetService';
+import { getAsset, getAssetFormOptions, updateAsset } from '$lib/server/services/assetService';
 import { logger } from '$lib/utils/logger';
 import type PocketBase from 'pocketbase';
 
@@ -13,15 +12,18 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     if (!id) throw error(400, 'Asset ID is required');
 
     try {
-        const [asset, options] = await Promise.all([
+        // [修改] 加入 pb.files.getToken() 於 Promise.all 中並行請求
+        const [asset, options, fileToken] = await Promise.all([
             getAsset(pb as unknown as PocketBase, id),
-            getAssetFormOptions(pb as unknown as PocketBase, locals.user)
+            getAssetFormOptions(pb as unknown as PocketBase, locals.user),
+            pb.files.getToken()
         ]);
 
         return {
             asset: JSON.parse(JSON.stringify(asset)),
             ...options, // 包含 categories 和 borrowableUsers
-            currentUser: locals.user ? JSON.parse(JSON.stringify(locals.user)) : null
+            currentUser: locals.user ? JSON.parse(JSON.stringify(locals.user)) : null,
+            fileToken // 回傳 token
         };
     } catch (err) {
         logger.error(`Failed to load asset ${id}:`, err);
@@ -40,7 +42,9 @@ export const actions: Actions = {
         if (!id) return fail(400, { error: 'Asset ID is required for update' });
 
         try {
-            await pb.collection('assets').update(id, formData);
+            // AssetForm 已經正確設定了 images- (移除) 和 images+ (新增) 欄位
+            // updateAsset 直接將 FormData 傳遞給 PocketBase，PB 會原子化處理這一切
+            await updateAsset(pb as unknown as PocketBase, id, formData);
         } catch (err: any) {
              logger.error('Failed to update asset:', err);
              const pbError = err?.data?.data;

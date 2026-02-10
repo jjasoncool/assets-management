@@ -6,6 +6,7 @@
 	import { Html5QrcodeScanner } from 'html5-qrcode';
 	import TomSelect from 'tom-select';
 	import type { BorrowRecord } from '$lib/types';
+	import { logger } from '$lib/utils/logger';
 
 	let { data, form } = $props();
 
@@ -30,7 +31,7 @@
 
 	// --- Tom Select ---
 	let tomselect: TomSelect | null = null;
-	let tomselectEl: HTMLInputElement;
+	let tomselectEl: HTMLInputElement | undefined = $state();
 
 	onMount(() => {
 		if (tomselectEl) {
@@ -85,7 +86,7 @@
 
 	function onScanFailure(error: any) {
 		// 此回呼會頻繁觸發，我們不在此顯示錯誤，只在需要除錯時打開日誌
-		// console.warn(`Code scan error = ${error}`);
+		logger.warn(`Code scan error:`, error);
 	}
 
 	function startScan() {
