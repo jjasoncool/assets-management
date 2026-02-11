@@ -1,6 +1,6 @@
 import type PocketBase from 'pocketbase';
 import { logger } from '$lib/utils/logger';
-import type { BorrowRecord } from '$lib/types';
+import { Collections, type BorrowRecord } from '$lib/types'; // [修正] 引入 Collections Enum
 import { getAsset, updateAsset } from './assetService';
 import { isAdmin } from './userService';
 
@@ -19,7 +19,8 @@ export async function getBorrowRecords(pb: PocketBase, listOptions?: {
   expand?: string;
 }) {
   try {
-    const records = await pb.collection('borrow_records').getList(
+    // 使用 Collections.BorrowRecords (確保名稱一致)
+    const records = await pb.collection(Collections.BorrowRecords).getList(
       listOptions?.page || 1,
       listOptions?.perPage || 50,
       {
@@ -107,7 +108,6 @@ export async function borrowAsset(
         finalUserId = borrowerId;
     }
 
-
     const asset = await getAsset(pb, assetId);
 
     if (asset.status !== 'active') {
@@ -130,7 +130,7 @@ export async function borrowAsset(
       }
     }
 
-    const borrowRecord = await pb.collection('borrow_records').create(formData);
+    const borrowRecord = await pb.collection(Collections.BorrowRecords).create(formData);
 
     if (targetStatus === 'borrowed') {
       await updateAsset(pb, assetId, { status: 'borrowed' });
@@ -175,10 +175,10 @@ export async function approveBorrow(pb: PocketBase, borrowRecordId: string) {
     const user = pb.authStore.record;
     if (!isAdmin(user)) throw new Error('權限不足');
 
-    const record = await pb.collection('borrow_records').getOne(borrowRecordId);
+    const record = await pb.collection(Collections.BorrowRecords).getOne(borrowRecordId);
     if (record.status !== 'pending') throw new Error('此記錄非待處理狀態');
 
-    const updatedRecord = await pb.collection('borrow_records').update(borrowRecordId, {
+    const updatedRecord = await pb.collection(Collections.BorrowRecords).update(borrowRecordId, {
       status: 'borrowed',
       borrow_date: new Date().toISOString()
     });
@@ -203,7 +203,7 @@ export async function rejectBorrow(pb: PocketBase, borrowRecordId: string) {
       const user = pb.authStore.record;
       if (!isAdmin(user)) throw new Error('權限不足');
 
-      const updatedRecord = await pb.collection('borrow_records').update(borrowRecordId, {
+      const updatedRecord = await pb.collection(Collections.BorrowRecords).update(borrowRecordId, {
         status: 'rejected'
       });
 
@@ -223,7 +223,7 @@ export async function getActiveBorrowRecordForAsset(pb: PocketBase, assetId: str
     const user = pb.authStore.record;
     if (!user) throw new Error('用戶未登入');
 
-    const records = await pb.collection('borrow_records').getFullList({
+    const records = await pb.collection(Collections.BorrowRecords).getFullList({
       filter: `asset = "${assetId}" && (status = "borrowed" || status = "overdue")`,
       sort: '-created',
       expand: 'asset,user'
@@ -256,7 +256,7 @@ export async function returnAsset(pb: PocketBase, borrowRecordId: string, return
     const user = pb.authStore.record;
     if (!user) throw new Error('用戶未登入');
 
-    const borrowRecord = await pb.collection('borrow_records').getOne(borrowRecordId);
+    const borrowRecord = await pb.collection(Collections.BorrowRecords).getOne(borrowRecordId);
 
     const userIsAdmin = isAdmin(user);
     const isBorrower = borrowRecord.user === user.id;
@@ -274,7 +274,7 @@ export async function returnAsset(pb: PocketBase, borrowRecordId: string, return
       }
     }
 
-    const updatedRecord = await pb.collection('borrow_records').update(borrowRecordId, formData);
+    const updatedRecord = await pb.collection(Collections.BorrowRecords).update(borrowRecordId, formData);
 
     const assetId = (borrowRecord as any).asset;
     if (assetId) {
@@ -309,13 +309,13 @@ export async function updateOverdueRecords(pb: PocketBase) {
   try {
     const today = new Date().toISOString();
 
-    const overdueRecords = await pb.collection('borrow_records').getFullList({
+    const overdueRecords = await pb.collection(Collections.BorrowRecords).getFullList({
       filter: `status = "borrowed" && expected_return_date < "${today}"`
     });
 
     let count = 0;
     for (const record of overdueRecords) {
-      await pb.collection('borrow_records').update(record.id, { status: 'overdue' });
+      await pb.collection(Collections.BorrowRecords).update(record.id, { status: 'overdue' });
       count++;
     }
 

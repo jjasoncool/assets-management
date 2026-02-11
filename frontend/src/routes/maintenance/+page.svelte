@@ -2,6 +2,7 @@
     import Navbar from '$lib/components/Navbar.svelte';
     import { bs } from '$lib/stores';
     import type { Modal } from 'bootstrap';
+    import { getFileToken, getPocketBaseImageUrl } from '$lib/utils/helpers';
 
     // Svelte 5 Runes: Props & Derived
     let { data } = $props();
@@ -29,14 +30,6 @@
     });
 
     /**
-     * Helper: 產生 PocketBase 圖片 URL
-     */
-    function getImageUrl(collectionId: string, recordId: string, fileName: string) {
-        const tokenPart = fileToken ? `?token=${fileToken}` : '';
-        return `/api/files/${collectionId}/${recordId}/${fileName}${tokenPart}`;
-    }
-
-    /**
      * Action: 開啟 Modal 並獲取 Token
      */
     async function openRecordModal(record: any) {
@@ -44,17 +37,7 @@
         activeSlide = 0; // 重置輪播圖到第一張
         modal?.show();
 
-        try {
-            const res = await fetch('/app-api/file-token');
-            if (res.ok) {
-                const data = await res.json();
-                fileToken = data.token;
-            } else {
-                console.error('無法獲取圖片權限');
-            }
-        } catch (err) {
-            console.error('獲取 Token 失敗:', err);
-        }
+        fileToken = await getFileToken();
     }
 
     /**
@@ -244,7 +227,7 @@
                                             <div class="carousel-item {i === activeSlide ? 'active' : ''} transition-opacity duration-300">
                                                 <div class="d-flex align-items-center justify-content-center" style="height: 350px;">
                                                     <img
-                                                        src={getImageUrl(selectedRecord.collectionId, selectedRecord.id, img)}
+                                                        src={getPocketBaseImageUrl(selectedRecord.collectionId, selectedRecord.id, img, fileToken)}
                                                         class="d-block w-100 h-100 object-fit-contain"
                                                         alt="Maintenance Proof"
                                                     >

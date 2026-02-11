@@ -1,9 +1,9 @@
 import { getBorrowRecords } from '$lib/server/services/borrowService';
 import type { PageServerLoad } from './$types';
 import type PocketBase from 'pocketbase';
+import { logger } from '$lib/utils/logger';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-    // 從 locals 獲取 PocketBase 實例與使用者 (由 hooks.server.ts 注入)
     const pb = locals.pb;
     const currentUser = locals.user;
 
@@ -30,22 +30,42 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         }
     }
 
-    // 3. 呼叫後端 Service 獲取資料
-    // 注意：我們不需要 try-catch 包覆所有東西，讓 SvelteKit 處理嚴重的 Server Error
-    // 如果需要特定的錯誤 UI，可以在這裡處理並回傳 error 物件
-    const recordsResult = await getBorrowRecords(pb as unknown as PocketBase, {
-        filter: filterParts.join(' && '),
-        page,
-        perPage: 10,
-        sort: '-created',
-        expand: 'user,asset'
-    });
+    // 3. 呼叫後端 Service 獲取資料 (加入錯誤處理)
+    try {
+        const recordsResult = await getBorrowRecords(pb as unknown as PocketBase, {
+            filter: filterParts.join(' && '),
+            page,
+            perPage: 10,
+            sort: '-created',
+            expand: 'user,asset'
+        });
 
-    // 4. 回傳資料 (SvelteKit 會自動序列化)
-    return {
-        recordsResult: JSON.parse(JSON.stringify(recordsResult)), // 確保 POJO 序列化
-        viewMode,
-        filterStatus,
-        page
-    };
+        // 成功回傳
+        return {
+            recordsResult: JSON.parse(JSON.stringify(recordsResult)),
+            viewMode,
+            filterStatus,
+            page,
+            currentUser: currentUser ? JSON.parse(JSON.stringify(currentUser)) : null
+        };
+
+    } catch (err: any) {
+        // [安全網] 發生錯誤時紀錄 Log，但回傳空資料讓頁面能正常顯示，避免無限 Loading
+        logger.error('Failed to load borrow records:', err);
+
+        return {
+            recordsResult: {
+                page: 1,
+                perPage: 10,
+                totalItems: 0,
+                totalPages: 0,
+                items: []
+            },
+            viewMode,
+            filterStatus,
+            page,
+            currentUser: currentUser ? JSON.parse(JSON.stringify(currentUser)) : null,
+            error: '無法載入資料，請稍後再試'
+        };
+    }
 };
