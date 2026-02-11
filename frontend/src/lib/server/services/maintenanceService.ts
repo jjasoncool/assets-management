@@ -104,15 +104,31 @@ export async function getMaintenanceRecord(pb: PocketBase, id: string) {
  * 獲取特定資產的所有維護歷史
  */
 export async function getAssetMaintenanceHistory(pb: PocketBase, assetId: string) {
+	try {
+		const records = await pb.collection(Collections.MaintenanceRecords).getFullList({
+			filter: `asset = "${assetId}"`,
+			sort: '-maintenance_date',
+			expand: 'performed_by'
+		});
+		return JSON.parse(JSON.stringify(records));
+	} catch (error) {
+		logger.error(`獲取資產 ${assetId} 維護歷史失敗:`, error);
+		throw error;
+	}
+}
+
+/**
+ * 獲取所有維護紀錄 (用於分析頁面)
+ */
+export async function getAllMaintenanceRecords(pb: PocketBase) {
     try {
         const records = await pb.collection(Collections.MaintenanceRecords).getFullList({
-            filter: `asset = "${assetId}"`,
             sort: '-maintenance_date',
-            expand: 'performed_by'
+            expand: 'asset,asset.asset_category'
         });
         return JSON.parse(JSON.stringify(records));
     } catch (error) {
-        logger.error(`獲取資產 ${assetId} 維護歷史失敗:`, error);
+        logger.error('獲取所有維護紀錄失敗:', error);
         throw error;
     }
 }
@@ -120,7 +136,6 @@ export async function getAssetMaintenanceHistory(pb: PocketBase, assetId: string
 // =================================================================
 // 寫入邏輯 (Write Operations)
 // =================================================================
-
 /**
  * [修改] 建立維護紀錄 (開始維護)
  * 動作：建立紀錄 + 將資產狀態改為 'maintenance'
