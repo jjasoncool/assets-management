@@ -8,7 +8,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     const page = Number(url.searchParams.get('page')) || 1;
     const search = url.searchParams.get('search') || '';
     const status = url.searchParams.get('status') || '';
-    const sort = url.searchParams.get('sort') || '-created';
+    const category = url.searchParams.get('category') || '';
+    const sort = url.searchParams.get('sort') || 'asset_id';
 
     const filterParts = [];
     if (search) {
@@ -16,6 +17,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     }
     if (status) {
         filterParts.push(`status = "${status}"`);
+    }
+    if (category) {
+        filterParts.push(`category = "${category}"`);
     }
     const filter = filterParts.length > 0 ? filterParts.join(' && ') : '';
 

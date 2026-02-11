@@ -19,12 +19,21 @@
     let totalItems = $derived(data.assets?.totalItems || 0);
 
     // 從 Server 回傳或 URL 取得當前排序
-    let currentSort = $derived(data.currentSort || '-created');
+    let currentSort = $derived(data.currentSort || 'asset_id');
 
     // URL 參數狀態 (初始化 UI 顯示用)
-    // 直接存取 page.url，不需要 $
     let searchQuery = $state(page.url.searchParams.get('search') || '');
     let statusFilter = $state(page.url.searchParams.get('status') || '');
+    let categoryFilter = $state(page.url.searchParams.get('category') || '');
+
+    // 當 URL 變更時，同步更新 UI 的顯示狀態
+    // This ensures that when filters are loaded from sessionStorage via goto(),
+    // the input fields and select boxes reflect the current state.
+    $effect(() => {
+        searchQuery = page.url.searchParams.get('search') || '';
+        statusFilter = page.url.searchParams.get('status') || '';
+        categoryFilter = page.url.searchParams.get('category') || '';
+    });
 
     // 選擇狀態
     let selectedAssets = $state<string[]>([]);
@@ -51,6 +60,18 @@
         { value: 'borrowed', label: '借出中' }
     ];
 
+    // --- Filter 持久化 ---
+    $effect(() => {
+        if (typeof sessionStorage !== 'undefined') {
+            const assetFilters = sessionStorage.getItem('assetFilters');
+            if (page.url.search) {
+                sessionStorage.setItem('assetFilters', page.url.search);
+            } else if (assetFilters) {
+                goto('/assets' + assetFilters, { replaceState: true });
+            }
+        }
+    });
+
     // --- 核心導航邏輯 ---
 
     function updateParams() {
@@ -63,8 +84,21 @@
         if (statusFilter) params.set('status', statusFilter);
         else params.delete('status');
 
+        if (categoryFilter) params.set('category', categoryFilter);
+        else params.delete('category');
+
         params.set('page', '1'); // 搜尋條件變更時重置回第一頁
         goto(`?${params.toString()}`);
+    }
+
+    function clearFilters() {
+        if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.removeItem('assetFilters');
+        }
+        searchQuery = '';
+        statusFilter = '';
+        categoryFilter = '';
+        goto('/assets', { replaceState: true });
     }
 
     // 排序邏輯
@@ -202,34 +236,53 @@
         <div class="card shadow-sm bg-white bg-opacity-90 mb-4 mt-4">
             <div class="card-body p-4">
                 <div class="row g-3 align-items-end">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label for="search" class="form-label small fw-bold text-secondary">搜尋資產</label>
                         <input
                             type="text"
                             id="search"
                             class="form-control shadow-none"
-                            placeholder="輸入名稱、編號或序號..."
+                            placeholder="關鍵字..."
                             bind:value={searchQuery}
                             onkeydown={(e) => e.key === 'Enter' && updateParams()}
                         />
                     </div>
                     <div class="col-md-3">
-                        <label for="status" class="form-label small fw-bold text-secondary">狀態過濾</label>
+                        <label for="category" class="form-label small fw-bold text-secondary">類別</label>
+                        <select id="category" class="form-select shadow-none"
+                            bind:value={categoryFilter}
+                            onchange={updateParams}>
+                            <option value="">全部</option>
+                            {#if data.categories}
+                                {#each data.categories as category}
+                                    <option value={category.id}>{category.name}</option>
+                                {/each}
+                            {/if}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="status" class="form-label small fw-bold text-secondary">狀態</label>
                         <select id="status" class="form-select shadow-none"
                             bind:value={statusFilter}
                             onchange={updateParams}>
-                            {#each statusOptions as option}
+                            <option value="">全部</option>
+                            {#each statusOptions.slice(1) as option}
                                 <option value={option.value}>{option.label}</option>
                             {/each}
                         </select>
                     </div>
-                    <div class="col-md-2">
-                        <button class="btn btn-primary w-100" onclick={updateParams}>
+                    <div class="col-md-1">
+                        <button class="btn btn-primary w-100" type="button" onclick={updateParams}>
                             <i class="mdi mdi-magnify"></i> 搜尋
                         </button>
                     </div>
-                    <div class="col-md-3 text-md-end">
-                        <a href="/assets/add" class="btn btn-success">
+                     <div class="col-md-2">
+                        <button class="btn btn-outline-danger w-100" type="button" onclick={clearFilters}>
+                            清除過濾條件
+                        </button>
+                    </div>
+                    <div class="col-md-1 text-md-end">
+                        <a href="/assets/add" class="btn btn-success w-100">
                             <i class="mdi mdi-plus"></i> 新增資產
                         </a>
                     </div>
@@ -245,7 +298,7 @@
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light text-muted">
                         <tr class="user-select-none">
-                            <th style="width: 40px;">
+                            <th style="width: 40px;" class="d-none d-lg-table-cell">
                                 <input
                                     type="checkbox"
                                     class="form-check-input"
@@ -258,22 +311,22 @@
                                 {#if currentSort === 'asset_id'} <i class="mdi mdi-arrow-up text-primary"></i> {/if}
                                 {#if currentSort === '-asset_id'} <i class="mdi mdi-arrow-down text-primary"></i> {/if}
                             </th>
-                            <th class="cursor-pointer" onclick={() => handleSort('name')}>
+                            <th class="cursor-pointer d-none d-lg-table-cell" onclick={() => handleSort('name')}>
                                 名稱
                                 {#if currentSort === 'name'} <i class="mdi mdi-arrow-up text-primary"></i> {/if}
                                 {#if currentSort === '-name'} <i class="mdi mdi-arrow-down text-primary"></i> {/if}
                             </th>
-                            <th>類別</th>
+                            <th class="d-none d-lg-table-cell">類別</th>
                             <th>品牌/型號</th>
                             <th>狀態</th>
-                            <th>位置</th>
-                            <th>保管人</th>
-                            <th class="cursor-pointer" onclick={() => handleSort('created')}>
+                            <th class="d-none d-lg-table-cell">位置</th>
+                            <th class="d-none d-lg-table-cell">保管人</th>
+                            <th class="cursor-pointer d-none d-lg-table-cell" onclick={() => handleSort('created')}>
                                 建立日期
                                 {#if currentSort === 'created'} <i class="mdi mdi-arrow-up text-primary"></i> {/if}
                                 {#if currentSort === '-created'} <i class="mdi mdi-arrow-down text-primary"></i> {/if}
                             </th>
-                            <th class="text-end px-4">操作</th>
+                            <th class="text-end px-2 px-lg-4">操作</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -282,7 +335,7 @@
                         {:else}
                             {#each assets as asset}
                                 <tr class="cursor-pointer" onclick={() => goto(`/assets/${asset.id}/edit`)}>
-                                    <td onclick={(e) => e.stopPropagation()}>
+                                    <td onclick={(e) => e.stopPropagation()} class="d-none d-lg-table-cell">
                                         <input
                                             type="checkbox"
                                             class="form-check-input"
@@ -291,32 +344,34 @@
                                         />
                                     </td>
                                     <td class="fw-medium">{asset.asset_id}</td>
-                                    <td>{asset.name}</td>
-                                    <td>{asset.expand?.category?.name || '未分類'}</td>
+                                    <td class="d-none d-lg-table-cell">{asset.name}</td>
+                                    <td class="d-none d-lg-table-cell">{asset.expand?.category?.name || '未分類'}</td>
                                     <td>{asset.brand || ''} {asset.model || ''}</td>
                                     <td>
                                         <span class="badge rounded-pill {getStatusBadgeClass(asset.status)}">
                                             {getStatusLabel(asset.status)}
                                         </span>
                                     </td>
-                                    <td>{asset.location || '-'}</td>
-                                    <td>{asset.expand?.assigned_to?.name || asset.expand?.assigned_to?.email || '未指派'}</td>
-                                    <td class="text-muted small">{new Date(asset.created).toLocaleDateString()}</td>
-                                    <td class="text-end px-4" onclick={(e) => e.stopPropagation()}>
-                                        {#if asset.status === 'active'}
-                                            <button onclick={(e) => openBorrowModal(e, asset)} class="btn btn-sm btn-outline-primary me-2" title="借用">
-                                                <i class="mdi mdi-hand-heart"></i> 借用
-                                            </button>
-                                        {/if}
-                                        {#if currentUser?.role?.includes('admin')}
-                                            <button
-                                                class="btn btn-link text-danger p-0 shadow-none"
-                                                title="刪除"
-                                                onclick={(e) => { e.stopPropagation(); confirmDelete(asset.id); }}
-                                            >
-                                                <i class="mdi mdi-delete-outline fs-5"></i>
-                                            </button>
-                                        {/if}
+                                    <td class="d-none d-lg-table-cell">{asset.location || '-'}</td>
+                                    <td class="d-none d-lg-table-cell">{asset.expand?.assigned_to?.name || asset.expand?.assigned_to?.email || '未指派'}</td>
+                                    <td class="text-muted small d-none d-lg-table-cell">{new Date(asset.created).toLocaleDateString()}</td>
+                                    <td class="text-end px-2 px-lg-4" onclick={(e) => e.stopPropagation()}>
+                                        <div style="white-space: nowrap;">
+                                            {#if asset.status === 'active'}
+                                                <button onclick={(e) => openBorrowModal(e, asset)} class="btn btn-sm btn-outline-primary me-2" title="借用">
+                                                    <i class="mdi mdi-hand-heart"></i><span class="d-none d-sm-inline"> 借用</span>
+                                                </button>
+                                            {/if}
+                                            {#if currentUser?.role?.includes('admin')}
+                                                <button
+                                                    class="btn btn-link text-danger p-0 shadow-none"
+                                                    title="刪除"
+                                                    onclick={(e) => { e.stopPropagation(); confirmDelete(asset.id); }}
+                                                >
+                                                    <i class="mdi mdi-delete-outline fs-5"></i>
+                                                </button>
+                                            {/if}
+                                        </div>
                                     </td>
                                 </tr>
                             {/each}
@@ -329,7 +384,7 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                          {#if currentUser?.role?.includes('admin')}
-                            <button class="btn btn-outline-danger btn-sm me-2" disabled={selectedAssets.length === 0}>
+                            <button class="btn btn-outline-danger btn-sm me-2 d-none d-lg-inline-block" disabled={selectedAssets.length === 0}>
                                 刪除所選 ({selectedAssets.length})
                             </button>
                         {/if}
@@ -380,3 +435,26 @@
         </div>
     </div>
 </div>
+
+<style>
+    @media (max-width: 991.98px) {
+        /* 
+         * On small screens (<lg), some columns are hidden. We target
+         * the visible 'Status' and 'Actions' columns to control their width.
+         *
+         * The full table has 10 columns.
+         * '操作' (Actions) is the last child, so nth-last-child(1) is correct.
+         * '狀態' (Status) is the 6th child, so nth-last-child(5) is correct (10 - 6 + 1).
+        */
+        .table th:nth-last-child(1),
+        .table td:nth-last-child(1) {
+            width: 85px; /* 操作 */
+            min-width: 85px;
+        }
+
+        .table th:nth-last-child(5),
+        .table td:nth-last-child(5) {
+            width: 75px; /* 狀態 */
+        }
+    }
+</style>

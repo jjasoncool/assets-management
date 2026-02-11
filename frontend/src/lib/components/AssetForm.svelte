@@ -24,7 +24,7 @@
 		users?: any[],
 		categories?: any[],
 		currentUser?: any,
-		fileToken?: string, // [新增]
+        fileToken?: string,
 		onCancel?: () => void
 	}>();
 
