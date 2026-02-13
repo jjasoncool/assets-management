@@ -30,6 +30,8 @@ services:
     restart: always
     environment:
       - POCKETBASE_URL=${POCKETBASE_URL}  # 服務端使用的 PocketBase URL
+      - PB_ADMIN_EMAIL=${PB_ADMIN_EMAIL}
+      - PB_ADMIN_PASSWORD=${PB_ADMIN_PASSWORD}
     volumes:
       # 將主機的 frontend 掛載到容器的 /app
       - ./frontend:/app

@@ -1,5 +1,7 @@
 import type PocketBase from 'pocketbase';
 import { logger } from '$lib/utils/logger';
+import { createPocketBaseInstance } from '$lib/pocketbase';
+import { env } from '$env/dynamic/private';
 
 // =================================================================
 // 資料獲取 (Data Fetching)
@@ -10,19 +12,49 @@ import { logger } from '$lib/utils/logger';
  * 權限：需要 admin 或有權限的 pb 實例
  */
 export async function getUsersList(pb: PocketBase) {
-    try {
-        const result = await pb.collection('users').getList(1, 1000, {
-            sort: 'name',
-            // 如果有需要，可以過濾掉停用的帳號
-            // filter: 'status = "active"'
-        });
+	// To fetch all user data including emails, we need admin privileges
+	// to bypass the collection's API rules. We use a temporary admin client.
+	const adminPb = createPocketBaseInstance();
+	const adminEmail = env.PB_ADMIN_EMAIL;
+	const adminPassword = env.PB_ADMIN_PASSWORD;
 
-        // 統一在這裡做序列化，Controller 就不用再寫 JSON.parse/stringify
-        return JSON.parse(JSON.stringify(result.items));
-    } catch (err) {
-        logger.error('獲取使用者列表失敗:', err);
-        return [];
-    }
+	// If admin credentials are not set, fallback to the user's pb instance,
+	// which may have limited fields (e.g., email might be hidden).
+	if (!adminEmail || !adminPassword) {
+		logger.warn(
+			'Admin credentials (PB_ADMIN_EMAIL, PB_ADMIN_PASSWORD) are not set. Falling back to user context, emails may be hidden.'
+		);
+		try {
+			const result = await pb.collection('users').getList(1, 1000, {
+				sort: 'name'
+			});
+			return JSON.parse(JSON.stringify(result.items));
+		} catch (err) {
+			logger.error('獲取使用者列表失敗 (using user context):', err);
+			return [];
+		}
+	}
+
+	try {
+		// Use admin credentials to fetch the full user list
+		await adminPb.admins.authWithPassword(adminEmail, adminPassword);
+		const result = await adminPb.collection('users').getList(1, 1000, {
+			sort: 'name'
+		});
+		return JSON.parse(JSON.stringify(result.items));
+	} catch (err) {
+		logger.error('獲取使用者列表失敗 (using admin context):', err);
+		// As a final fallback, try with the user's context if admin auth fails
+		try {
+			const result = await pb.collection('users').getList(1, 1000, {
+				sort: 'name'
+			});
+			return JSON.parse(JSON.stringify(result.items));
+		} catch (err_user_ctx) {
+			logger.error('獲取使用者列表失敗 (fallback to user context):', err_user_ctx);
+			return [];
+		}
+	}
 }
 
 /**
