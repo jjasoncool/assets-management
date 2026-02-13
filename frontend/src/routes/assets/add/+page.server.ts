@@ -1,5 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { createAssetWithIdGeneration, getAssetCategories, getAssetFormOptions } from '$lib/server/services/assetService';
+import { createAssetWithIdGeneration, getAllAssetCategories } from '$lib/server/services/assetService';
+import { getUsersList, isAdmin } from '$lib/server/services/userService';
 import { logger } from '$lib/utils/logger';
 import type { Actions, PageServerLoad } from './$types';
 import type PocketBase from 'pocketbase';
@@ -8,19 +9,31 @@ import type { AssetCategory } from '$lib/types';
 // 1. 新增 Load 函式：負責準備頁面需要的資料 (下拉選單選項)
 export const load: PageServerLoad = async ({ locals }) => {
     try {
-        // 傳遞 currentUser 給 getAssetFormOptions
-        const options = await getAssetFormOptions(locals.pb as unknown as PocketBase, locals.user);
+        const pb = locals.pb as unknown as PocketBase;
+        const user = locals.user;
+
+        // [重構] 使用 Promise.all 並行請求：
+        // 1. 獲取所有資產類別 (來自 AssetService)
+        // 2. 獲取使用者列表 (來自 UserService，僅管理員需要完整列表)
+        const categoriesPromise = getAllAssetCategories(pb);
+        const usersPromise = isAdmin(user) ? getUsersList(pb) : Promise.resolve(user ? [user] : []);
+
+        const [categories, borrowableUsers] = await Promise.all([
+            categoriesPromise,
+            usersPromise
+        ]);
 
         return {
-            ...options, // 這會自動展開成 categories 和 borrowableUsers
-            currentUser: locals.user ? JSON.parse(JSON.stringify(locals.user)) : null
+            categories: JSON.parse(JSON.stringify(categories)),
+            borrowableUsers: JSON.parse(JSON.stringify(borrowableUsers)),
+            currentUser: user ? JSON.parse(JSON.stringify(user)) : null
         };
 
     } catch (err) {
         logger.error('Failed to load add asset options:', err);
         return {
             categories: [],
-            borrowableUsers: [], // 修正屬性名稱
+            borrowableUsers: [],
             currentUser: locals.user || null
         };
     }
@@ -41,8 +54,8 @@ export const actions: Actions = {
     }
 
     try {
-      const categoriesData = await getAssetCategories(pb as unknown as PocketBase);
-      const categories = categoriesData.items as unknown as AssetCategory[];
+      // [修正] 改用 getAllAssetCategories 確保能取得到對應的類別資料 (不受分頁限制)
+      const categories = await getAllAssetCategories(pb as unknown as PocketBase);
 
       await createAssetWithIdGeneration(
         pb as unknown as PocketBase,

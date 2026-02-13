@@ -1,43 +1,77 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getAllMaintenanceRecords } from '$lib/server/services/maintenanceService';
+import { getAllAssetCategories } from '$lib/server/services/assetService';
 import type { MaintenanceRecord } from '$lib/types';
 import { logger } from '$lib/utils/logger';
 
-interface CostByCategory {
-	[key: string]: number;
+interface StatsByCategory {
+	[key: string]: {
+		totalCost: number;
+		count: number;
+	};
 }
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
 	if (!locals.pb.authStore.isValid) {
 		throw redirect(303, '/login');
 	}
 
+	const selectedCategoryId = url.searchParams.get('category') || '';
+	const endDate = url.searchParams.get('endDate') || new Date().toISOString().split('T')[0];
+	const defaultStartDate = new Date();
+	defaultStartDate.setFullYear(defaultStartDate.getFullYear() - 1);
+	const startDate = url.searchParams.get('startDate') || defaultStartDate.toISOString().split('T')[0];
+
 	try {
-		const records: MaintenanceRecord[] = await getAllMaintenanceRecords(locals.pb);
+		const [records, categories] = await Promise.all([
+			getAllMaintenanceRecords(locals.pb as any, {
+				categoryId: selectedCategoryId,
+				startDate,
+				endDate
+			}),
+			getAllAssetCategories(locals.pb as any)
+		]);
+
+		const selectedCategory = categories.find((c: any) => c.id === selectedCategoryId);
+		const selectedCategoryName = selectedCategory ? selectedCategory.name : '';
 
 		// Calculate total cost
-		const totalCost = records.reduce((sum, record) => sum + record.cost, 0);
+		const totalCost = records.reduce((sum: number, record: MaintenanceRecord) => sum + record.cost, 0);
+		const totalRecords = records.length;
+		const averageCost = totalRecords > 0 ? totalCost / totalRecords : 0;
 
 		// Calculate cost by category
-		const costByCategory = records.reduce((acc: CostByCategory, record) => {
-			// @ts-expect-error - expand is not typed
-			const categoryName = record.expand?.asset?.expand?.asset_category?.name || '未分類';
-			acc[categoryName] = (acc[categoryName] || 0) + record.cost;
+		const statsByCategory = records.reduce((acc: StatsByCategory, record: MaintenanceRecord) => {
+			const categoryName = record.expand?.asset?.expand?.category?.name || '未分類';
+			if (!acc[categoryName]) {
+				acc[categoryName] = { totalCost: 0, count: 0 };
+			}
+			acc[categoryName].totalCost += record.cost;
+			acc[categoryName].count++;
 			return acc;
 		}, {});
 
 		// Prepare data for charts
-		const categoryLabels = Object.keys(costByCategory);
-		const categoryData = Object.values(costByCategory);
+		const categoryLabels = Object.keys(statsByCategory);
+		const totalCostData = categoryLabels.map((label) => statsByCategory[label].totalCost);
+		const averageCostData = categoryLabels.map(
+			(label) => statsByCategory[label].totalCost / statsByCategory[label].count
+		);
 
 		return {
+			categories,
+			selectedCategoryId,
+			selectedCategoryName,
+			startDate,
+			endDate,
 			totalCost,
-			totalRecords: records.length,
-			averageCost: records.length > 0 ? totalCost / records.length : 0,
-			costByCategory: {
+			totalRecords,
+			averageCost,
+			chartData: {
 				labels: categoryLabels,
-				data: categoryData
+				totalCostData,
+				averageCostData
 			}
 		};
 	} catch (err) {

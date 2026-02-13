@@ -120,17 +120,35 @@ export async function getAssetMaintenanceHistory(pb: PocketBase, assetId: string
 /**
  * 獲取所有維護紀錄 (用於分析頁面)
  */
-export async function getAllMaintenanceRecords(pb: PocketBase) {
-    try {
-        const records = await pb.collection(Collections.MaintenanceRecords).getFullList({
-            sort: '-maintenance_date',
-            expand: 'asset,asset.asset_category'
-        });
-        return JSON.parse(JSON.stringify(records));
-    } catch (error) {
-        logger.error('獲取所有維護紀錄失敗:', error);
-        throw error;
-    }
+export async function getAllMaintenanceRecords(
+	pb: PocketBase,
+	options?: { categoryId?: string; startDate?: string; endDate?: string }
+) {
+	try {
+		const filterParts: string[] = ['complete_date != ""'];
+
+		if (options?.categoryId) {
+			filterParts.push(`asset.category = "${options.categoryId}"`);
+		}
+		if (options?.startDate) {
+			filterParts.push(`complete_date >= "${options.startDate} 00:00:00"`);
+		}
+		if (options?.endDate) {
+			filterParts.push(`complete_date <= "${options.endDate} 23:59:59"`);
+		}
+
+		const filter = filterParts.join(' && ');
+
+		const records = await pb.collection(Collections.MaintenanceRecords).getFullList({
+			filter,
+			sort: '-maintenance_date',
+			expand: 'asset,asset.category'
+		});
+		return JSON.parse(JSON.stringify(records));
+	} catch (error) {
+		logger.error('獲取所有維護紀錄失敗:', error);
+		throw error;
+	}
 }
 
 // =================================================================

@@ -1,28 +1,32 @@
 import { fail, redirect, error } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
-import { getAsset, getAssetFormOptions, updateAsset } from '$lib/server/services/assetService';
+import { getAsset, updateAsset, getAllAssetCategories } from '$lib/server/services/assetService';
+import { getUsersList, isAdmin } from '$lib/server/services/userService';
 import { logger } from '$lib/utils/logger';
 import type PocketBase from 'pocketbase';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
     const pb = locals.pb;
+    const user = locals.user;
     if (!pb) throw error(401, 'Unauthorized');
 
     const id = params.id;
     if (!id) throw error(400, 'Asset ID is required');
 
     try {
-        // [修改] 加入 pb.files.getToken() 於 Promise.all 中並行請求
-        const [asset, options, fileToken] = await Promise.all([
+        // 並行請求：資產資料、類別列表、使用者列表、檔案 Token
+        const [asset, categories, borrowableUsers, fileToken] = await Promise.all([
             getAsset(pb as unknown as PocketBase, id),
-            getAssetFormOptions(pb as unknown as PocketBase, locals.user),
+            getAllAssetCategories(pb as unknown as PocketBase),
+            isAdmin(user) ? getUsersList(pb as unknown as PocketBase) : Promise.resolve(user ? [user] : []),
             pb.files.getToken()
         ]);
 
         return {
             asset: JSON.parse(JSON.stringify(asset)),
-            ...options, // 包含 categories 和 borrowableUsers
-            currentUser: locals.user ? JSON.parse(JSON.stringify(locals.user)) : null,
+            categories: JSON.parse(JSON.stringify(categories)),
+            borrowableUsers: JSON.parse(JSON.stringify(borrowableUsers)),
+            currentUser: user ? JSON.parse(JSON.stringify(user)) : null,
             fileToken // 回傳 token
         };
     } catch (err) {

@@ -1,7 +1,7 @@
 import type PocketBase from 'pocketbase';
 import { logger } from '$lib/utils/logger';
 import type { Asset, AssetCategory } from '$lib/types';
-import { getUsersList, isAdmin } from './userService';
+import { isAdmin } from './userService';
 
 // =================================================================
 // 資產函式 (Server Side)
@@ -257,23 +257,21 @@ export async function getAssetCategories(pb: PocketBase, options?: {
 }
 
 /**
- * 獲取資產頁面所需的options
+ * 獲取所有資產類別 (下拉選單用)
  */
-export async function getAssetFormOptions(pb: PocketBase, currentUser: any) {
-    const categoriesResult = await getAssetCategories(pb, { sort: 'name' });
-
-    let borrowableUsers = [];
-    if (isAdmin(currentUser)) {
-        borrowableUsers = await getUsersList(pb);
-    } else if (currentUser) {
-        borrowableUsers = [currentUser];
-    }
-
-    return {
-        categories: JSON.parse(JSON.stringify(categoriesResult.items)),
-        borrowableUsers: JSON.parse(JSON.stringify(borrowableUsers))
-    };
+export async function getAllAssetCategories(pb: PocketBase) {
+  try {
+    const records = await pb.collection('asset_categories').getFullList({
+        sort: 'name'
+    });
+    return records as unknown as AssetCategory[];
+  } catch (error) {
+    logger.error('獲取所有資產類別列表失敗:', error);
+    throw error;
+  }
 }
+
+
 
 /**
  * 透過 ID 獲取單個資產類別

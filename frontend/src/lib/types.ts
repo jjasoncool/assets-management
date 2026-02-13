@@ -51,6 +51,9 @@ export interface Asset {
   notes?: string;
   created: string;
   updated: string;
+  expand?: {
+    [key: string]: any;
+  };
 }
 
 // [新增] 維護紀錄介面

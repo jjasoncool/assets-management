@@ -1,8 +1,10 @@
 import { fail } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
-import { getAssets, deleteAsset, getAssetFormOptions } from '$lib/server/services/assetService';
+import { getAssets, deleteAsset, getAllAssetCategories } from '$lib/server/services/assetService';
+import { getUsersList, isAdmin } from '$lib/server/services/userService';
 import { borrowAsset } from '$lib/server/services/borrowService';
 import type PocketBase from 'pocketbase';
+import { logger } from '$lib/utils/logger';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
     const page = Number(url.searchParams.get('page')) || 1;
@@ -25,27 +27,30 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
     try {
         const pb = locals.pb as unknown as PocketBase;
-        
-        // 同時獲取資產和表單選項
-        const [assets, options] = await Promise.all([
+        const user = locals.user;
+
+        // [重構] 同時獲取資產列表、類別列表(供篩選用)、使用者列表(供借用 Modal 用)
+        const [assets, categories, borrowableUsers] = await Promise.all([
             getAssets(pb, page, 20, { filter, sort }),
-            getAssetFormOptions(pb, locals.user) // <-- 使用重構後的 Service
+            getAllAssetCategories(pb),
+            isAdmin(user) ? getUsersList(pb) : Promise.resolve(user ? [user] : [])
         ]);
 
         return {
-            assets,
+            assets: JSON.parse(JSON.stringify(assets)),
+            categories: JSON.parse(JSON.stringify(categories)),
+            borrowableUsers: JSON.parse(JSON.stringify(borrowableUsers)),
             currentSort: sort,
-            currentUser: locals.user,
-            ...options // 包含 categories 和 borrowableUsers
+            currentUser: user ? JSON.parse(JSON.stringify(user)) : null
         };
     } catch (err) {
-        console.error('Load assets error:', err);
+        logger.error('Load assets error:', err);
         return {
             assets: { items: [], totalItems: 0, totalPages: 0, page: 1, perPage: 20 },
-            currentSort: sort,
-            currentUser: locals.user,
-            borrowableUsers: [],
             categories: [],
+            borrowableUsers: [],
+            currentSort: sort,
+            currentUser: locals.user ? JSON.parse(JSON.stringify(locals.user)) : null,
             error: `無法載入資產列表: ${(err as Error).message}`
         };
     }
@@ -63,7 +68,7 @@ export const actions: Actions = {
             await deleteAsset(locals.pb as unknown as PocketBase, id);
             return { success: true };
         } catch (err) {
-            console.error('Delete error:', err);
+            logger.error('Delete error:', err);
             return fail(500, { error: '刪除失敗' });
         }
     },
@@ -81,15 +86,15 @@ export const actions: Actions = {
 
         try {
             await borrowAsset(
-                locals.pb as unknown as PocketBase, 
-                assetId, 
-                returnDate, 
+                locals.pb as unknown as PocketBase,
+                assetId,
+                returnDate,
                 images,
                 userId // 傳遞使用者 ID
             );
             return { success: true };
         } catch (err: any) {
-            console.error('Borrow error:', err);
+            logger.error('Borrow error:', err);
             return fail(500, { error: err.message || '借用申請失敗' });
         }
     }

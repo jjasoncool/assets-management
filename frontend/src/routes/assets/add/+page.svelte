@@ -3,9 +3,8 @@
     import Navbar from '$lib/components/Navbar.svelte';
     import AssetForm from '$lib/components/AssetForm.svelte';
 
-    // 接收 Server 傳來的資料 (包含 users, categories, currentUser)
+    // 接收 Server 傳來的資料 (包含 borrowableUsers, categories, currentUser)
     let { data, form } = $props();
-
     // 這裡我們直接使用 data 裡的資料
 </script>
 
@@ -25,7 +24,7 @@
             <AssetForm
                 mode="create"
                 form={form}
-                users={data.users}
+                users={data.borrowableUsers}
                 categories={data.categories}
                 onCancel={() => goto('/assets')}
             />
