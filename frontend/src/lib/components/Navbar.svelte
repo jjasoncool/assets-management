@@ -190,6 +190,16 @@
                                 <i class="mdi mdi-account me-2"></i>Profile
                             </a>
                         </li>
+                        {#if currentUser?.role?.includes('admin')}
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    class:active={$page.url.pathname.startsWith('/users')}
+                                    href="/users"
+                                    ><i class="mdi mdi-account-group me-2"></i>使用者管理</a
+                                >
+                            </li>
+                        {/if}
                         <li><hr class="dropdown-divider" /></li>
                         <li>
                             <form action="/logout" method="POST" style="margin: 0;">

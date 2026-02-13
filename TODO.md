@@ -15,7 +15,9 @@
 ### 資產管理 (Asset Management)
 - **相關路徑:** `/assets`, `/asset-categories`
 - **待辦事項:**
-    - [ ] 圖片覆蓋問題
+    - [x] 圖片覆蓋問題
+    - [ ] 新增資產詳細編號欄位 (擴充使用)
+
 
 ### 借還管理 (Borrow & Return Management)
 - **相關路徑:** `/borrow`, `/return`
@@ -25,7 +27,7 @@
 ### 維護管理 (Maintenance Management)
 - **相關路徑:** `/maintenance`
 - **待辦事項:**
-    - *暫無*
+    - [ ] 類別新增 tooltip 說明維護類型
 
 ### 使用者與驗證 (User & Authentication)
 - **相關路徑:** `/login`, `/logout`, `/profile`

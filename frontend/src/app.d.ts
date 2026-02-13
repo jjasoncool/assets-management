@@ -1,11 +1,13 @@
+import type PocketBase, { type Record, type Admin } from 'pocketbase';
+
 // See https://kit.svelte.dev/docs/types#app
 // for information about these interfaces
 declare global {
 	namespace App {
 		// interface Error {}
 		interface Locals {
-			pb: import('pocketbase/cjs').default;
-			user: any;
+			pb: PocketBase;
+			user: Record | Admin | null;
 		}
 		// interface PageData {}
 		// interface Platform {}
