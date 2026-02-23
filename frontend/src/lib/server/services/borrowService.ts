@@ -1,5 +1,6 @@
 import type PocketBase from 'pocketbase';
 import { logger } from '$lib/utils/logger';
+import { formatDateTime } from '$lib/utils/datetime';
 import { Collections, type BorrowRecord } from '$lib/types'; // [修正] 引入 Collections Enum
 import { getAsset, updateAsset } from './assetService';
 import { isAdmin } from './userService';
@@ -120,7 +121,8 @@ export async function borrowAsset(
     const formData = new FormData();
     formData.append('asset', assetId);
     formData.append('user', finalUserId); // 使用最終確認的 user ID
-    formData.append('borrow_date', new Date().toISOString());
+    // 使用 formatDateTime 統一時間格式與時區
+    formData.append('borrow_date', formatDateTime(new Date()));
     formData.append('expected_return_date', expectedReturnDate);
     formData.append('status', targetStatus);
 
@@ -180,7 +182,8 @@ export async function approveBorrow(pb: PocketBase, borrowRecordId: string) {
 
     const updatedRecord = await pb.collection(Collections.BorrowRecords).update(borrowRecordId, {
       status: 'borrowed',
-      borrow_date: new Date().toISOString()
+      // 使用 formatDateTime 統一時間格式與時區
+      borrow_date: formatDateTime(new Date())
     });
 
     if (record.asset) {
@@ -307,7 +310,8 @@ export async function checkAssetAvailability(pb: PocketBase, assetId: string) {
  */
 export async function updateOverdueRecords(pb: PocketBase) {
   try {
-    const today = new Date().toISOString();
+    // 使用 formatDateTime 獲取統一格式的當前時間，用於過濾
+    const today = formatDateTime(new Date());
 
     const overdueRecords = await pb.collection(Collections.BorrowRecords).getFullList({
       filter: `status = "borrowed" && expected_return_date < "${today}"`

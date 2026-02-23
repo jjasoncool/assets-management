@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import Navbar from '$lib/components/Navbar.svelte';
+	import { getCurrentZonedDateString } from '$lib/utils/datetime';
 
 	// Svelte 5 Runes: 接收 PageData 和 ActionData (form)
 	let { data, form } = $props();
@@ -99,7 +100,7 @@
 										id="maintenance_date"
 										name="maintenance_date"
 										required
-										value={new Date().toISOString().split('T')[0]}
+										value={getCurrentZonedDateString()}
 									/>
 								</div>
 								<div class="col-md-6 mb-3">

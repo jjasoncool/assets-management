@@ -3,10 +3,12 @@
     import { bs } from '$lib/stores';
     import type { Modal } from 'bootstrap';
     import { getFileToken, getPocketBaseImageUrl } from '$lib/utils/helpers';
+    import { formatDate } from '$lib/utils/datetime';
 
     // Svelte 5 Runes: Props & Derived
     let { data } = $props();
     let records = $derived(data.records?.items || []);
+    let status = $derived(data.status); // 獲取當前的篩選狀態
 
     // [State] UI 狀態控制
     let selectedRecord = $state<any>(null);
@@ -61,7 +63,6 @@
         <Navbar />
 
         <div class="card shadow-sm bg-white bg-opacity-90 mt-4">
-
             <div class="card-header bg-white bg-opacity-90 py-3 d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0 fw-bold">
                     <i class="mdi mdi-history me-2"></i>維護紀錄中心
@@ -78,10 +79,36 @@
                 </div>
             </div>
 
+            <!-- Filter Tabs: 篩選頁籤 -->
+            <ul class="nav nav-tabs px-4 pt-2 border-bottom-0" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <a
+                        class="nav-link"
+                        class:active={status === 'completed'}
+                        href="/maintenance"
+                        aria-current={status === 'completed' ? 'page' : undefined}
+                    >
+                        <i class="mdi mdi-check-circle-outline me-1"></i>
+                        已完成紀錄
+                    </a>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <a
+                        class="nav-link"
+                        class:active={status === 'all'}
+                        href="/maintenance?status=all"
+                        aria-current={status === 'all' ? 'page' : undefined}
+                    >
+                        <i class="mdi mdi-format-list-bulleted me-1"></i>
+                        所有紀錄
+                    </a>
+                </li>
+            </ul>
+
             <div class="card-body p-0">
                 {#if records.length > 0}
                     <div class="px-4 py-2 bg-light border-bottom text-muted small">
-                        已歸檔歷史紀錄：{records.length} 筆
+                        {status === 'all' ? '所有歷史紀錄' : '已歸檔的完成紀錄'}：{records.length} 筆
                         <span class="ms-2 text-primary opacity-75">(點擊列表可查看詳情與照片)</span>
                     </div>
                 {/if}
@@ -105,7 +132,13 @@
                                         <div class="text-muted opacity-25 mb-2">
                                             <i class="mdi mdi-clipboard-text-off-outline fs-1"></i>
                                         </div>
-                                        <p class="text-muted mb-0">目前尚無歷史維護紀錄</p>
+                                        <p class="text-muted mb-0">
+                                            {#if status === 'all'}
+                                                目前尚無任何維護紀錄
+                                            {:else}
+                                                目前尚無已完成的維護紀錄
+                                            {/if}
+                                        </p>
                                     </td>
                                 </tr>
                             {/if}
@@ -119,7 +152,7 @@
                                     onkeydown={(e) => e.key === 'Enter' && openRecordModal(record)}
                                 >
                                     <td class="ps-4 text-nowrap fw-medium">
-                                        {new Date(record.maintenance_date).toLocaleDateString()}
+                                        {formatDate(record.maintenance_date)}
                                     </td>
                                     <td>
                                         <div class="d-flex flex-column">
@@ -191,13 +224,13 @@
 
                             <div class="mb-3">
                                 <span class="text-muted small d-block">維護日期</span>
-                                <span class="fw-medium">{new Date(selectedRecord.maintenance_date).toLocaleDateString()}</span>
+                                <span class="fw-medium">{formatDate(selectedRecord.maintenance_date)}</span>
                             </div>
 
                             {#if selectedRecord.complete_date}
                                 <div class="mb-3">
                                     <span class="text-muted small d-block">完工日期</span>
-                                    <span class="fw-medium text-success">{new Date(selectedRecord.complete_date).toLocaleDateString()}</span>
+                                    <span class="fw-medium text-success">{formatDate(selectedRecord.complete_date)}</span>
                                 </div>
                             {/if}
 
@@ -208,7 +241,7 @@
 
                             <div class="mb-3">
                                 <span class="text-muted small d-block">詳細描述</span>
-                                <div class="p-2 bg-light rounded text-secondary" style="white-space: pre-wrap;">
+                                <div class="p-2 bg-light rounded text-secondary text-break" style="white-space: pre-wrap;">
                                     {selectedRecord.description || '無詳細描述'}
                                 </div>
                             </div>

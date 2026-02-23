@@ -2,6 +2,7 @@
 	import Navbar from '$lib/components/Navbar.svelte';
 	import { pb } from '$lib/pocketbase';
 	import type { PageData } from './$types';
+	import { formatDate } from '$lib/utils/datetime';
 
 	let { data } = $props<{ data: PageData }>();
 
@@ -86,7 +87,7 @@
 											{/if}
 										</td>
 										<td class="text-nowrap">
-											{new Date(user.created).toLocaleDateString()}
+											{formatDate(user.created)}
 										</td>
 										<td class="pe-4 text-end">
 											<!-- <a href="/users/{user.id}/edit" class="btn btn-sm btn-outline-primary">編輯</a> -->

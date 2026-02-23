@@ -7,6 +7,7 @@
     import type { Modal } from 'bootstrap';
     // [關鍵] 確保 helpers.ts 裡面有這些函式
     import { getFileToken, getPocketBaseImageUrl } from '$lib/utils/helpers';
+	import { formatDate } from '$lib/utils/datetime';
 
     let { data } = $props();
     // 使用 $derived 獲取資料
@@ -212,8 +213,8 @@
                                             </a>
                                             <small class="d-block text-muted">{borrow.expand?.asset?.asset_id}</small>
                                         </td>
-                                        <td>{new Date(borrow.borrow_date).toLocaleDateString()}</td>
-                                        <td>{new Date(borrow.expected_return_date).toLocaleDateString()}</td>
+                                        <td>{formatDate(borrow.borrow_date)}</td>
+                                        <td>{formatDate(borrow.expected_return_date)}</td>
                                         <td class="text-center">
                                             <span class="badge {getStatusClass(borrow.status)}">{borrow.status}</span>
                                         </td>
@@ -324,18 +325,18 @@
 
                             <div class="mb-3">
                                 <span class="text-muted small d-block">借用日期</span>
-                                <span class="fw-medium">{new Date(selectedRecord.borrow_date).toLocaleDateString()}</span>
+                                <span class="fw-medium">{formatDate(selectedRecord.borrow_date)}</span>
                             </div>
 
                             <div class="mb-3">
                                 <span class="text-muted small d-block">預計歸還</span>
-                                <span class="fw-medium">{new Date(selectedRecord.expected_return_date).toLocaleDateString()}</span>
+                                <span class="fw-medium">{formatDate(selectedRecord.expected_return_date)}</span>
                             </div>
 
                             {#if selectedRecord.return_date}
                                 <div class="mb-3">
                                     <span class="text-muted small d-block">實際歸還</span>
-                                    <span class="fw-medium text-success">{new Date(selectedRecord.return_date).toLocaleDateString()}</span>
+                                    <span class="fw-medium text-success">{formatDate(selectedRecord.return_date)}</span>
                                 </div>
                             {/if}
                         </div>

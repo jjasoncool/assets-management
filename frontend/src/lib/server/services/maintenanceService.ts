@@ -1,5 +1,6 @@
 import type PocketBase from 'pocketbase';
 import { logger } from '$lib/utils/logger';
+import { formatDate } from '$lib/utils/datetime';
 import { Collections, type Asset } from '$lib/types';
 import { updateAsset } from './assetService';
 
@@ -204,10 +205,10 @@ export async function completeMaintenanceRecord(
         });
         const oldDescription = existingRecord.description || '';
 
-        // 2. 組合新的 description，附加在舊的後面
+        // 2. 組合新的 description，附加在舊的後面 (使用 formatDate 確保日期格式一致)
         const finalDescription = oldDescription
-            ? `${oldDescription}\n---\n[完工資訊] ${new Date().toLocaleDateString()}\n${newDescriptionPart}`
-            : `[完工資訊] ${new Date().toLocaleDateString()}\n${newDescriptionPart}`;
+            ? `${oldDescription}\n---\n[完工資訊] ${formatDate(new Date())}\n${newDescriptionPart}`
+            : `[完工資訊] ${formatDate(new Date())}\n${newDescriptionPart}`;
 
         // 3. 準備更新資料
         const updateData: any = {

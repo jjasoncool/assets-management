@@ -1,6 +1,7 @@
 <script lang="ts">
     import { enhance } from '$app/forms';
     import type { Asset } from '$lib/types';
+    import { formatDate, getCurrentZonedDateString } from '$lib/utils/datetime'; // 引入 datetime 工具函式
 
     // 定義 Props
     let { asset, currentUser, borrowableUsers = [], onsuccess, oncancel } = $props<{
@@ -15,10 +16,11 @@
     let error = $state<string | null>(null);
     let expectedReturnDate = $state('');
 
-    // 計算預設歸還日期 (例如預設 7 天後)
+    // 計算預設歸還日期 (預設 7 天後)
     const defaultDate = new Date();
     defaultDate.setDate(defaultDate.getDate() + 7);
-    expectedReturnDate = defaultDate.toISOString().split('T')[0];
+    // 使用 formatDate 統一格式化邏輯，並確保時區正確
+    expectedReturnDate = formatDate(defaultDate);
 
     function handleCancel() {
         if (oncancel) oncancel();
@@ -91,7 +93,7 @@
                 id="returnDate"
                 name="expected_return_date"
                 bind:value={expectedReturnDate}
-                min={new Date().toISOString().split('T')[0]}
+                min={getCurrentZonedDateString()}
                 required
             />
         </div>

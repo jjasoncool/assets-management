@@ -9,6 +9,7 @@
 	import dayGridPlugin from '@fullcalendar/daygrid';
 	import timeGridPlugin from '@fullcalendar/timegrid';
 	import interactionPlugin from '@fullcalendar/interaction';
+	import { formatDate } from '$lib/utils/datetime';
 
 	let { data } = $props();
 
@@ -146,11 +147,11 @@
                                 <div class="flex-grow-1">
                                     <div class="fw-semibold">{record.expand?.asset?.name || '未知物品'}</div>
                                     <div class="small text-muted">
-                                        借出: {new Date(record.borrow_date).toLocaleDateString('zh-TW')}
+                                        借出: {formatDate(record.borrow_date)}
                                         {#if record.actual_return_date}
-                                            <br>歸還: {new Date(record.actual_return_date).toLocaleDateString('zh-TW')}
+                                            <br>歸還: {formatDate(record.actual_return_date)}
                                         {:else if record.expected_return_date}
-                                            <br>預計歸還: {new Date(record.expected_return_date).toLocaleDateString('zh-TW')}
+                                            <br>預計歸還: {formatDate(record.expected_return_date)}
                                         {/if}
                                     </div>
                                     <span class="badge {record.status === 'borrowed' ? 'text-bg-danger' : 'text-bg-success'} rounded-pill mt-1">

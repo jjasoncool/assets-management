@@ -4,6 +4,8 @@ import { getAllMaintenanceRecords } from '$lib/server/services/maintenanceServic
 import { getAllAssetCategories } from '$lib/server/services/assetService';
 import type { MaintenanceRecord } from '$lib/types';
 import { logger } from '$lib/utils/logger';
+import { subYears } from 'date-fns';
+import { formatDate, getCurrentZonedDateString } from '$lib/utils/datetime';
 
 interface StatsByCategory {
 	[key: string]: {
@@ -18,10 +20,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	}
 
 	const selectedCategoryId = url.searchParams.get('category') || '';
-	const endDate = url.searchParams.get('endDate') || new Date().toISOString().split('T')[0];
-	const defaultStartDate = new Date();
-	defaultStartDate.setFullYear(defaultStartDate.getFullYear() - 1);
-	const startDate = url.searchParams.get('startDate') || defaultStartDate.toISOString().split('T')[0];
+	// [修正] 使用新的 datetime helpers 處理日期，避免時區問題
+	const endDate = url.searchParams.get('endDate') || getCurrentZonedDateString();
+	const startDate = url.searchParams.get('startDate') || formatDate(subYears(new Date(), 1));
 
 	try {
 		const [records, categories] = await Promise.all([

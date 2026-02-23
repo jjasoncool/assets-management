@@ -7,6 +7,7 @@
 	import TomSelect from 'tom-select';
 	import type { BorrowRecord } from '$lib/types';
 	import { logger } from '$lib/utils/logger';
+	import { formatDate } from '$lib/utils/datetime';
 
 	let { data, form } = $props();
 
@@ -39,9 +40,9 @@
 				maxItems: 1,
 				options: borrowedAssets.map((record: BorrowRecord) => ({
 					value: record.id,
-					text: `${record.expand?.asset?.asset_id || 'N/A'} - ${record.expand?.asset?.name} (應還: ${new Date(
+					text: `${record.expand?.asset?.asset_id || 'N/A'} - ${record.expand?.asset?.name} (應還: ${formatDate(
 						record.expected_return_date
-					).toLocaleDateString()})`
+					)})`
 				})),
 				create: false,
 				allowEmptyOption: true,

@@ -1,11 +1,13 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { formatDateTime } from '$lib/utils/datetime';
+
   let currentYear: number;
 
   // 動態獲取當前年份
-  import { onMount } from 'svelte';
-
   onMount(() => {
-    currentYear = new Date().getFullYear();
+    // 使用 formatDateTime 獲取當前年份，確保時區一致性
+    currentYear = Number(formatDateTime(new Date(), 'yyyy'));
   });
 </script>
 
