@@ -193,16 +193,30 @@ export async function completeMaintenanceRecord(
     recordId: string,
     assetId: string,
     completeDate: string,
+    actualCost: number,
+    newDescriptionPart: string,
     proofImages?: File[]
 ) {
     try {
-        // 1. 準備更新資料
-        // 使用 formData 是為了方便處理 File 上傳，且 PocketBase SDK 支援傳入 object 包含 File
+        // 1. 獲取當前的紀錄以讀取舊的描述
+        const existingRecord = await pb.collection(Collections.MaintenanceRecords).getOne(recordId, {
+            fields: 'description'
+        });
+        const oldDescription = existingRecord.description || '';
+
+        // 2. 組合新的 description，附加在舊的後面
+        const finalDescription = oldDescription
+            ? `${oldDescription}\n---\n[完工資訊] ${new Date().toLocaleDateString()}\n${newDescriptionPart}`
+            : `[完工資訊] ${new Date().toLocaleDateString()}\n${newDescriptionPart}`;
+
+        // 3. 準備更新資料
         const updateData: any = {
-            complete_date: completeDate
+            complete_date: completeDate,
+            cost: actualCost,
+            description: finalDescription
         };
 
-        // 處理照片 Append (關鍵修改: 使用 'maintenance_images+' key)
+        // 處理照片 Append
         if (proofImages && proofImages.length > 0) {
             // 注意：PocketBase JS SDK 處理 multiple files append 的方式
             // key 必須包含 '+'
@@ -211,16 +225,16 @@ export async function completeMaintenanceRecord(
 
         // 更新維護紀錄
         const record = await pb.collection(Collections.MaintenanceRecords).update(recordId, updateData);
-        logger.log(`維護紀錄 ${recordId} 已標記完成`);
+        logger.log(`維護紀錄 ${recordId} 已標記完成，費用: ${actualCost}`);
 
-        // 2. [關鍵邏輯] 檢查是否還有該資產的「未完成工單」
+        // 4. [關鍵邏輯] 檢查是否還有該資產的「未完成工單」
         // 我們查詢該資產所有 complete_date 為空的紀錄
         const remainingJobs = await pb.collection(Collections.MaintenanceRecords).getList(1, 1, {
             filter: `asset = "${assetId}" && complete_date = ""`,
-            fields: 'id' // 只需檢查數量，優化效能
+            fields: 'id'
         });
 
-        // 3. 只有當剩餘工單數為 0 時，才把資產改回 Active
+        // 5. 只有當剩餘工單數為 0 時，才把資產改回 Active
         if (remainingJobs.totalItems === 0) {
             await updateAsset(pb, assetId, {
                 status: 'active' as Asset['status']

@@ -103,7 +103,7 @@
 									/>
 								</div>
 								<div class="col-md-6 mb-3">
-									<label for="cost" class="form-label fw-bold">維護費用</label>
+									<label for="cost" class="form-label fw-bold">預估維護費用</label>
 									<div class="input-group">
 										<span class="input-group-text">$</span>
 										<input
