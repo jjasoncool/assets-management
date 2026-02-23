@@ -37,6 +37,7 @@
     "moment": "^2.30.1",
     "pocketbase": "^0.26.8",
     "sweetalert2": "^11.26.18",
-    "tom-select": "^2.4.5"
+    "tom-select": "^2.4.5",
+    "viewerjs": "^1.11.7"
   }
 }
