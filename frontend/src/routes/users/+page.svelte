@@ -14,7 +14,7 @@
 </svelte:head>
 
 <div class="min-vh-100 pb-5">
-	<div class="container-fluid px-4">
+	<div class="container-fluid px-sm-4">
 		<Navbar />
 
 		<div class="card shadow-sm bg-white bg-opacity-90 mt-4 border-primary">

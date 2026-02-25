@@ -73,7 +73,7 @@
 </style>
 
 <div class="min-vh-100 pb-5">
-    <div class="container-fluid px-4">
+    <div class="container-fluid px-sm-4">
         <Navbar />
 
         <div class="row g-4">
