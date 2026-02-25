@@ -357,7 +357,7 @@
                                     <td class="text-muted small d-none d-lg-table-cell">{new Date(asset.created).toLocaleDateString()}</td>
                                     <td class="text-end px-2 px-lg-4" onclick={(e) => e.stopPropagation()}>
                                         <div style="white-space: nowrap;">
-                                            {#if asset.status === 'active'}
+                                            {#if asset.status === 'active' && asset.is_lendable}
                                                 <button onclick={(e) => openBorrowModal(e, asset)} class="btn btn-sm btn-outline-primary me-2" title="借用">
                                                     <i class="mdi mdi-hand-heart"></i><span class="d-none d-sm-inline"> 借用</span>
                                                 </button>
@@ -438,7 +438,7 @@
 
 <style>
     @media (max-width: 991.98px) {
-        /* 
+        /*
          * On small screens (<lg), some columns are hidden. We target
          * the visible 'Status' and 'Actions' columns to control their width.
          *

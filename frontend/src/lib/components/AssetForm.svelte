@@ -63,6 +63,7 @@
 		integrity_score: undefined as number | undefined,
 		availability_score: undefined as number | undefined,
 		status: 'active',
+		is_lendable: false, // [修改] 是否可借用，預設為 false
 		notes: ''
 	});
 
@@ -169,6 +170,7 @@
 		formData.integrity_score = assetData.integrity_score !== undefined ? assetData.integrity_score : undefined;
 		formData.availability_score = assetData.availability_score !== undefined ? assetData.availability_score : undefined;
 		formData.status = assetData.status || 'active';
+		formData.is_lendable = assetData.is_lendable !== undefined ? assetData.is_lendable : false; // [修改]
 		formData.notes = assetData.notes || '';
 
 		if (assetData.images && Array.isArray(assetData.images)) {
@@ -332,6 +334,9 @@
 		if (formData.confidentiality_score !== undefined) formPayload.set('confidentiality_score', formData.confidentiality_score.toString());
         if (formData.integrity_score !== undefined) formPayload.set('integrity_score', formData.integrity_score.toString());
         if (formData.availability_score !== undefined) formPayload.set('availability_score', formData.availability_score.toString());
+		// [新增] 確保布林值被正確傳遞
+		formPayload.set('is_lendable', formData.is_lendable ? 'true' : 'false');
+
 
 		return async ({ result, update }) => {
 			loading = false;
@@ -513,7 +518,7 @@
                     {/each}
                 </select>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <label for="status" class="form-label small fw-bold text-secondary">狀態</label>
                 <select
                     id="status"
@@ -526,6 +531,22 @@
                     {/each}
                 </select>
             </div>
+			<div class="col-md-2">
+                <label for="is_lendable" class="form-label small fw-bold text-secondary">允許借用</label>
+				<div class="form-check form-switch form-switch-lg">
+					<input
+						class="form-check-input"
+						type="checkbox"
+						role="switch"
+						id="is_lendable"
+						name="is_lendable"
+						bind:checked={formData.is_lendable}
+					/>
+					<label class="form-check-label visually-hidden" for="is_lendable">
+						允許借用
+					</label>
+				</div>
+			</div>
         </div>
 		<div class="row g-3 mb-4">
             <div class="col-md-12 mb-2">
@@ -709,7 +730,7 @@
 							<i class="mdi mdi-arrow-left me-2"></i>
 							返回列表
 						</button>
-						{#if mode === 'edit' && formData.status === 'active'}
+						{#if mode === 'edit' && formData.status === 'active' && formData.is_lendable}
 							<button type="button" class="btn btn-info ms-2" onclick={showBorrowModal}>
 								<i class="mdi mdi-hand-heart me-2"></i>
 								借用此資產
@@ -771,3 +792,16 @@
         </div>
     </div>
 </div>
+
+<style>
+    /* Custom styles for a larger Bootstrap switch */
+    .form-switch-lg {
+        padding-left: 3.5rem; /* width + gutter */
+        padding-bottom: 2px; /* Fine-tune vertical alignment with other form controls */
+    }
+    .form-switch-lg .form-check-input {
+        width: 3rem;
+        height: 1.5rem;
+        margin-left: -3.5rem;
+    }
+</style>

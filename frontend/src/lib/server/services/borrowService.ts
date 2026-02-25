@@ -111,6 +111,10 @@ export async function borrowAsset(
 
     const asset = await getAsset(pb, assetId);
 
+    if (!asset.is_lendable) {
+      throw new Error('此資產不提供借用');
+    }
+
     if (asset.status !== 'active') {
       throw new Error(`資產狀態為 ${asset.status}，不可借用`);
     }
@@ -298,7 +302,7 @@ export async function returnAsset(pb: PocketBase, borrowRecordId: string, return
 export async function checkAssetAvailability(pb: PocketBase, assetId: string) {
   try {
     const asset = await getAsset(pb, assetId);
-    return asset.status === 'active';
+    return asset.is_lendable && asset.status === 'active';
   } catch (error) {
     logger.error('檢查資產可用性失敗:', error);
     return false;
