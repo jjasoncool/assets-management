@@ -1,16 +1,41 @@
 <script lang="ts">
     import Navbar from '$lib/components/Navbar.svelte';
     import MaintenanceDetail from '$lib/components/MaintenanceDetail.svelte';
-    import { getFileToken } from '$lib/utils/helpers';
+    import { getFileToken, getMaintenanceTypeInfo } from '$lib/utils/helpers';
     import { formatDate } from '$lib/utils/datetime';
+    import { bs } from '$lib/stores';
 
     // Svelte 5 Runes: Props & Derived
     let { data } = $props();
-    let records = $derived(data.records?.items || []);
+    let records = $derived(
+        data.records?.items.map((r: any) => ({
+            ...r,
+            typeInfo: getMaintenanceTypeInfo(r.maintenance_type)
+        })) || []
+    );
     let status = $derived(data.status); // 獲取當前的篩選狀態
 
     // Detail Modal 元件參考
     let detailModal: ReturnType<typeof MaintenanceDetail>;
+
+    // 初始化 Tooltip
+    $effect(() => {
+        let bsInstance: any = null;
+        const unsubscribe = bs.subscribe(value => bsInstance = value);
+
+        if (bsInstance) {
+            const tooltipTriggerList = Array.from(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            const tooltipList = tooltipTriggerList.map(tooltipTriggerEl => {
+                return new bsInstance.Tooltip(tooltipTriggerEl);
+            });
+
+            return () => {
+                tooltipList.forEach(tooltip => tooltip.dispose());
+            };
+        }
+        
+        return unsubscribe;
+    });
 
     /**
      * Action: 開啟 Modal 並獲取 Token
@@ -133,15 +158,14 @@
                                         </div>
                                     </td>
                                     <td>
-                                        {#if record.maintenance_type === 'preventive'}
-                                            <span class="badge bg-success bg-opacity-10 text-success">預防性</span>
-                                        {:else if record.maintenance_type === 'corrective'}
-                                            <span class="badge bg-danger bg-opacity-10 text-danger">修復性</span>
-                                        {:else}
-                                            <span class="badge bg-secondary bg-opacity-10 text-secondary">
-                                                {record.maintenance_type}
-                                            </span>
-                                        {/if}
+                                        <span
+                                            class={record.typeInfo.className}
+                                            data-bs-toggle="tooltip"
+                                            data-bs-placement="top"
+                                            title={record.typeInfo.description}
+                                        >
+                                            {record.typeInfo.label || '其他'}
+                                        </span>
                                     </td>
                                     <td class="font-monospace fw-bold">
                                         ${record.cost.toLocaleString()}

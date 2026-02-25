@@ -3,14 +3,19 @@
     import { enhance } from '$app/forms';
     import Navbar from '$lib/components/Navbar.svelte';
     import MaintenanceDetail from '$lib/components/MaintenanceDetail.svelte';
-    import { getMaintenanceTypeLabel, getFileToken } from '$lib/utils/helpers';
+    import { getMaintenanceTypeInfo, getFileToken } from '$lib/utils/helpers';
     import { bs } from '$lib/stores';
     import type { PageData } from './$types';
     import type { Modal } from 'bootstrap';
     import { formatDate, getCurrentZonedDateString } from '$lib/utils/datetime';
 
     const { data } = $props<{ data: PageData }>();
-    let records = $derived(data.records?.items || []);
+        let records = $derived(
+        data.records?.items.map((r: any) => ({
+            ...r,
+            typeInfo: getMaintenanceTypeInfo(r.maintenance_type)
+        })) || []
+    );
 
     // 結案 Modal 狀態控制
     let selectedRecord: any = $state(null);
@@ -46,6 +51,25 @@
         return () => {
             completeModal?.dispose();
         };
+    });
+
+    // 初始化 Tooltip
+    $effect(() => {
+        let bsInstance: any = null;
+        const unsubscribe = bs.subscribe(value => bsInstance = value);
+
+        if (bsInstance) {
+            const tooltipTriggerList = Array.from(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            const tooltipList = tooltipTriggerList.map(tooltipTriggerEl => {
+                return new bsInstance.Tooltip(tooltipTriggerEl);
+            });
+
+            return () => {
+                tooltipList.forEach(tooltip => tooltip.dispose());
+            };
+        }
+        
+        return unsubscribe;
     });
 
     // 手動觸發結案 Modal 開啟
@@ -138,15 +162,14 @@
                                             </div>
                                         </td>
                                         <td>
-                                            {#if record.maintenance_type === 'preventive'}
-                                                <span class="badge bg-success bg-opacity-10 text-success">預防性</span>
-                                            {:else if record.maintenance_type === 'corrective'}
-                                                <span class="badge bg-danger bg-opacity-10 text-danger">修復性</span>
-                                            {:else}
-                                                <span class="badge bg-secondary bg-opacity-10 text-secondary">
-                                                    {record.maintenance_type}
-                                                </span>
-                                            {/if}
+                                            <span
+                                                class={record.typeInfo.className}
+                                                data-bs-toggle="tooltip"
+                                                data-bs-placement="top"
+                                                title={record.typeInfo.description}
+                                            >
+                                                {record.typeInfo.label || '其他'}
+                                            </span>
                                         </td>
                                         <td class="font-monospace">${record.cost.toLocaleString()}</td>
                                         <td>{record.expand?.performed_by?.name || '-'}</td>
@@ -213,11 +236,10 @@
                                 <span class="text-muted small">資產名稱:</span>
                                 <span class="fw-bold">{selectedRecord.expand?.asset?.name}</span>
                             </div>
-                            <div class="d-flex justify-content-between">
-                                <span class="text-muted small">維護類型:</span>
-                                <span>{getMaintenanceTypeLabel(selectedRecord.maintenance_type)}</span>
-                            </div>
-                        </div>
+                                                            <div class="d-flex justify-content-between">
+                                                                <span class="text-muted small">維護類型:</span>
+                                                                <span>{getMaintenanceTypeInfo(selectedRecord.maintenance_type).label || '其他'}</span>
+                                                            </div>                        </div>
 
                         <div class="mb-3 border rounded p-3 bg-light">
                             <p class="mb-2 small text-muted">

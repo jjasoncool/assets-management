@@ -1,13 +1,40 @@
 import { logger } from '$lib/utils/logger';
 
-export function getMaintenanceTypeLabel(type: string): string {
+/**
+ * 根據維護類型獲取對應的顯示資訊
+ * @param type - 維護類型
+ * @returns 包含標籤、描述和樣式類別的物件
+ */
+export function getMaintenanceTypeInfo(type: string): {
+	label: string;
+	description: string;
+	className: string;
+} {
 	switch (type) {
 		case 'preventive':
-			return '預防性';
+			return {
+				label: '預防性',
+				description: '為防止資產故障或效能下降而定期進行的計畫性維護。',
+				className: 'badge bg-success bg-opacity-10 text-success'
+			};
 		case 'corrective':
-			return '修復性';
+			return {
+				label: '修復性',
+				description: '當資產發生故障、損壞或無法正常運作時所進行的非計畫性維修。',
+				className: 'badge bg-danger bg-opacity-10 text-danger'
+			};
+		case 'inspection':
+			return {
+				label: '例行檢查',
+				description: '對資產進行定期或不定期的檢查，以評估其狀況並及早發現潛在問題。',
+				className: 'badge bg-info bg-opacity-10 text-info'
+			};
 		default:
-			return type;
+			return {
+				label: type,
+				description: '其他類型的維護活動',
+				className: 'badge bg-secondary bg-opacity-10 text-secondary'
+			};
 	}
 }
 
