@@ -3,10 +3,11 @@
 	import { pb } from '$lib/pocketbase';
 	import type { PageData } from './$types';
 	import { formatDate } from '$lib/utils/datetime';
+	import type { User } from '$lib/types';
 
 	let { data } = $props<{ data: PageData }>();
 
-	let { users } = $derived(data);
+	let users = $derived(data.users as User[]);
 </script>
 
 <svelte:head>
@@ -18,13 +19,15 @@
 		<Navbar />
 
 		<div class="card shadow-sm bg-white bg-opacity-90 mt-4 border-primary">
-			<div class="card-header bg-primary bg-opacity-10 py-3 d-flex justify-content-between align-items-center">
+			<div
+				class="card-header bg-primary bg-opacity-10 py-3 d-flex justify-content-between align-items-center"
+			>
 				<h5 class="card-title mb-0 fw-bold text-primary-emphasis">
 					<i class="mdi mdi-account-group me-2"></i>使用者管理
 				</h5>
-				<!-- <a href="/users/add" class="btn btn-primary btn-sm">
-						<i class="mdi mdi-plus me-1"></i> 新增使用者
-					</a> -->
+				<a href="/users/add" class="btn btn-primary btn-sm">
+					<i class="mdi mdi-plus me-1"></i> 新增使用者
+				</a>
 			</div>
 
 			<div class="card-body p-0">
@@ -34,15 +37,17 @@
 							<tr>
 								<th class="ps-4 py-3">名稱</th>
 								<th class="py-3">Email</th>
+								<th class="py-3">部門</th>
 								<th class="py-3">角色</th>
 								<th class="py-3">建立時間</th>
+								<th class="py-3">最後修改</th>
 								<th class="pe-4 py-3 text-end">操作</th>
 							</tr>
 						</thead>
 						<tbody>
 							{#if !users || users.length === 0}
 								<tr>
-									<td colspan="5" class="text-center py-5">
+									<td colspan="7" class="text-center py-5">
 										<div class="text-muted opacity-50 mb-2">
 											<i class="mdi mdi-account-multiple-outline fs-1"></i>
 										</div>
@@ -56,7 +61,9 @@
 											<div class="d-flex align-items-center">
 												{#if user.avatar}
 													<img
-														src={pb.files.getURL(user, user.avatar)}
+														src={pb.files.getURL(user, user.avatar, {
+															thumb: '100x100'
+														})}
 														alt={user.name}
 														class="rounded-circle me-2"
 														width="32"
@@ -74,23 +81,32 @@
 											</div>
 										</td>
 										<td class="font-monospace text-muted">{user.email}</td>
+										<td>{user.department || '-'}</td>
 										<td>
 											{#if user.role && user.role.length > 0}
 												{#each user.role as r}
-													<span class="badge bg-primary bg-opacity-10 text-primary fw-medium"
+													<span
+														class="badge bg-primary bg-opacity-10 text-primary fw-medium"
 														>{r}</span
 													>
 												{/each}
 											{:else}
-												<span class="badge bg-secondary bg-opacity-10 text-secondary">無</span
+												<span class="badge bg-secondary bg-opacity-10 text-secondary"
+													>無</span
 												>
 											{/if}
 										</td>
 										<td class="text-nowrap">
 											{formatDate(user.created)}
 										</td>
+										<td class="text-nowrap">
+											{user.expand?.modified_by?.name || '-'}
+											<div class="small text-muted">{formatDate(user.updated)}</div>
+										</td>
 										<td class="pe-4 text-end">
-											<!-- <a href="/users/{user.id}/edit" class="btn btn-sm btn-outline-primary">編輯</a> -->
+											<a href="/users/{user.id}/edit" class="btn btn-sm btn-outline-primary"
+												>編輯</a
+											>
 										</td>
 									</tr>
 								{/each}

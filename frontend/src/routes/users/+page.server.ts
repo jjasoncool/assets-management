@@ -8,7 +8,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		throw error(403, 'Forbidden');
 	}
 
-	const users = await getUsersList(locals.pb);
+	const users = await getUsersList(locals.pb, { asAdmin: true, expand: 'modified_by' });
 
 	return {
 		users
