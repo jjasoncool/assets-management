@@ -1,12 +1,16 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import type { ActionData } from './$types';
+	import { page } from '$app/stores';
 
 	let { form } = $props<{ form: ActionData }>();
 
 	let loading = $state(false);
 	// 新增：前端自己的錯誤訊息狀態
 	let clientError = $state('');
+
+	// 檢查 URL 中是否帶有 reset=success 參數
+	const showResetSuccess = $derived($page.url.searchParams.get('reset') === 'success');
 
 	// 保留您原本的驗證邏輯
 	function validateEmail(email: string): boolean {
@@ -34,6 +38,14 @@
 						</div>
 						<div class="row mt-2">
 							<div class="col-12">
+								<!-- 密碼重設成功提示訊息 -->
+								{#if showResetSuccess}
+									<div class="alert alert-success text-dark text-center small py-2">
+										<i class="mdi mdi-check-circle-outline"></i>
+										密碼已成功重設，請使用您的新密碼登入。
+									</div>
+								{/if}
+
 								<form
 									method="POST"
 									action="?/login"
@@ -134,7 +146,7 @@
 					</div>
 				</div>
 			</div>
-            <footer class="row">
+			<footer class="row">
 				<div class="col-12 font-weight-light text-center">
 					<p class="d-inline-block tm-bg-black text-white py-2 px-4">
 						Copyright &copy;

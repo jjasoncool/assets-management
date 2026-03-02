@@ -1,13 +1,29 @@
 <script lang="ts">
 	import Navbar from '$lib/components/Navbar.svelte';
 	import { pb } from '$lib/pocketbase';
-	import type { PageData } from './$types';
+	import type { ActionData, PageData } from './$types';
 	import { formatDate } from '$lib/utils/datetime';
 	import type { User } from '$lib/types';
+	import { enhance } from '$app/forms';
 
 	let { data } = $props<{ data: PageData }>();
+	// 修正 #1: ActionData 在初始時可能為 undefined
+	let form: ActionData | undefined = $state();
 
 	let users = $derived(data.users as User[]);
+
+	// 用於追蹤每個使用者重設密碼按鈕的狀態
+	// key: userId, value: { sending: boolean, sent: boolean }
+	let resetStatus = $state<Record<string, { sending: boolean; sent: boolean }>>({});
+
+	// 初始化所有按鈕狀態
+	$effect(() => {
+		users.forEach((user) => {
+			if (!resetStatus[user.id]) {
+				resetStatus[user.id] = { sending: false, sent: false };
+			}
+		});
+	});
 </script>
 
 <svelte:head>
@@ -104,9 +120,61 @@
 											<div class="small text-muted">{formatDate(user.updated)}</div>
 										</td>
 										<td class="pe-4 text-end">
-											<a href="/users/{user.id}/edit" class="btn btn-sm btn-outline-primary"
-												>編輯</a
+											<a
+												href="/users/{user.id}/edit"
+												class="btn btn-sm btn-outline-primary">編輯</a
 											>
+											<form
+												method="POST"
+												action="?/resetPassword"
+												class="d-inline-block ms-1"
+												use:enhance={() => {
+													// 表單提交前，將按鈕設為發送中狀態
+													resetStatus[user.id].sending = true;
+
+													return async ({ result }) => {
+														// 表單提交完成後，結束發送中狀態
+														resetStatus[user.id].sending = false;
+
+														// 修正 #2: 必須先檢查 result.type 才能安全地存取 data
+														if (result.type === 'success' || result.type === 'failure') {
+															// 修正 #3: 使用類型斷言，告訴 TS result.data 的具體形狀
+															form = result.data as ActionData;
+
+															// 如果後端操作成功，將按鈕設為「已發送」狀態
+															if (form?.success) {
+																resetStatus[user.id].sent = true;
+																// 3 秒後恢復按鈕，以便再次操作
+																setTimeout(() => {
+																	resetStatus[user.id].sent = false;
+																}, 3000);
+															}
+														}
+													};
+												}}
+											>
+												<input type="hidden" name="email" value={user.email} />
+												<button
+													type="submit"
+													class="btn btn-sm btn-outline-secondary"
+													disabled={resetStatus[user.id]?.sending ||
+														resetStatus[user.id]?.sent}
+												>
+													{#if resetStatus[user.id]?.sending}
+														<span
+															class="spinner-border spinner-border-sm"
+															aria-hidden="true"
+														></span>
+														<span class="visually-hidden" role="status">發送中...</span>
+													{:else if resetStatus[user.id]?.sent}
+														<i class="mdi mdi-check-all"></i>
+														已發送
+													{:else}
+														<i class="mdi mdi-email-fast-outline"></i>
+														重設密碼
+													{/if}
+												</button>
+											</form>
 										</td>
 									</tr>
 								{/each}

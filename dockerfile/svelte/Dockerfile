@@ -1,5 +1,5 @@
 # 使用 Node.js LTS 官方映像
-FROM node:lts-alpine
+FROM node:lts-slim
 
 # 設定工作目錄
 WORKDIR /app

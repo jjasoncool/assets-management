@@ -1,7 +1,7 @@
 # 使用最輕量的 Alpine Linux
 FROM alpine:latest
 
-ARG PB_VERSION=0.35.0
+ARG PB_VERSION=0.36.5
 
 # 安裝必要的工具 (unzip, ca-certificates 用於 HTTPS 下載)
 RUN apk add --no-cache \
@@ -17,4 +17,5 @@ RUN unzip /tmp/pb.zip -d /pb/
 EXPOSE 8090
 
 # 啟動指令 (資料庫存在 /pb/pb_data)
-CMD /pb/pocketbase serve --http=0.0.0.0:8090
+# 使用 exec 格式，讓 pocketbase 作為 PID 1，以便正確處理 OS 信號
+CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8090"]
