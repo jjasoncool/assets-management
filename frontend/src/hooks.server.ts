@@ -1,9 +1,10 @@
 import { redirect } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit';
+import { dev } from '$app/environment';
 import { createPocketBaseInstance } from '$lib/pocketbase';
 
-// 定義不需要保護的路由 (只有登入頁面不需要保護)
-const publicRoutes = ['/login'];
+// 定義不需要保護的路由
+const publicRoutes = ['/login', '/password-reset'];
 
 export const handle: Handle = async ({ event, resolve }) => {
   const { url, cookies } = event;
@@ -16,7 +17,7 @@ export const handle: Handle = async ({ event, resolve }) => {
   const tokenValue = cookies.get('pb_auth');
 
   // 只在開發環境顯示敏感日誌
-  const isDev = process.env.NODE_ENV === 'development';
+  const isDev = dev;
   if (isDev) {
     console.log(`[SERVER] ${url.pathname} - Token value:`, tokenValue ? 'EXISTS' : 'NOT FOUND');
     console.log(`[SERVER] ${url.pathname} - Token content:`, tokenValue?.substring(0, 20) + '...');
