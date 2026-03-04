@@ -33,6 +33,7 @@
 	// --- Tom Select ---
 	let tomselect: TomSelect | null = null;
 	let tomselectEl: HTMLInputElement | undefined = $state();
+	let tomselectInitialized = $state(false);
 
 	onMount(() => {
 		if (tomselectEl) {
@@ -62,6 +63,7 @@
 			if (assetIdFromQuery) {
 				tomselect.disable();
 			}
+			tomselectInitialized = true;
 		}
 	});
 
@@ -168,18 +170,23 @@
 								</div>
 							</div>
 						{:else}
-							<div class="text-center mb-4 border-bottom pb-4">
-								{#if isScanning}
-									<div id="qr-reader" style="max-width: 500px; margin: auto; border-radius: 8px; overflow: hidden;"></div>
-									<button type="button" class="btn btn-outline-danger mt-3" onclick={stopScan}>
-										<i class="mdi mdi-close me-1"></i>取消掃描
-									</button>
-								{:else}
-									<button type="button" class="btn btn-info" onclick={startScan}>
-										<i class="mdi mdi-qrcode-scan me-1"></i>掃描資產 QR Code
-									</button>
-								{/if}
-							</div>
+							{#if !assetIdFromQuery}
+								<div class="text-center mb-4 border-bottom pb-4">
+									{#if isScanning}
+										<div
+											id="qr-reader"
+											style="max-width: 500px; margin: auto; border-radius: 8px; overflow: hidden;"
+										></div>
+										<button type="button" class="btn btn-outline-danger mt-3" onclick={stopScan}>
+											<i class="mdi mdi-close me-1"></i>取消掃描
+										</button>
+									{:else}
+										<button type="button" class="btn btn-info" onclick={startScan}>
+											<i class="mdi mdi-qrcode-scan me-1"></i>掃描資產 QR Code
+										</button>
+									{/if}
+								</div>
+							{/if}
 
 							<form
 								method="POST"
@@ -195,13 +202,23 @@
 								<div class="mb-3">
 									<label for="tom-select-asset" class="form-label fw-bold">要歸還的資產</label>
 
+									<!--
+										當 assetIdFromQuery 存在時，TomSelect 會被禁用。
+										由於 disabled 的欄位值不會被 form 提交，
+										我們在此加入一個 hidden input 來確保 recordId 能被正常傳送到後端。
+									-->
+									{#if assetIdFromQuery}
+										<input type="hidden" name="recordId" value={selectedRecordId} />
+									{/if}
+
 									<input
 										type="text"
 										id="tom-select-asset"
 										name="recordId"
 										bind:this={tomselectEl}
-										required
+										required={!assetIdFromQuery}
 										disabled={!!assetIdFromQuery}
+										style:visibility={tomselectInitialized ? 'visible' : 'hidden'}
 									/>
 
 									{#if assetIdFromQuery}

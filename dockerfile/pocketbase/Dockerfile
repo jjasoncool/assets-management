@@ -18,4 +18,4 @@ EXPOSE 8090
 
 # 啟動指令 (資料庫存在 /pb/pb_data)
 # 使用 exec 格式，讓 pocketbase 作為 PID 1，以便正確處理 OS 信號
-CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8090"]
+CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8090", "--hooksDir=/pb/pb_hooks"]
