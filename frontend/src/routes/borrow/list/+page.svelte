@@ -3,7 +3,7 @@
     import { page, navigating } from '$app/state';
     import Navbar from '$lib/components/Navbar.svelte';
     import BorrowDetail from '$lib/components/BorrowDetail.svelte';
-    import { getFileToken } from '$lib/utils/helpers';
+    import { getFileToken, getBorrowStatusInfo } from '$lib/utils/helpers'; // 【重構】匯入新的輔助函式
 	import { formatDate } from '$lib/utils/datetime';
 
     let { data } = $props();
@@ -54,15 +54,7 @@
         }
     }
     
-    function getStatusClass(status: string) {
-        switch (status) {
-            case 'borrowed': return 'bg-primary';
-            case 'pending': return 'bg-warning text-dark';
-            case 'overdue': return 'bg-danger';
-            case 'returned': return 'bg-success';
-            default: return 'bg-secondary';
-        }
-    }
+    // 【重構】移除 getStatusClass 函式，改用全域的 getBorrowStatusInfo
 
     /**
      * Action: 開啟 Modal 並獲取 Token
@@ -155,6 +147,7 @@
                             </thead>
                             <tbody>
                                 {#each recordsResult.items as borrow (borrow.id)}
+                                    {@const statusInfo = getBorrowStatusInfo(borrow.status)}
                                     <tr
                                         class:table-warning={borrow.status === 'pending'}
                                         class:table-danger={borrow.status === 'overdue'}
@@ -180,7 +173,8 @@
                                         <td>{formatDate(borrow.borrow_date)}</td>
                                         <td>{formatDate(borrow.expected_return_date)}</td>
                                         <td class="text-center">
-                                            <span class="badge {getStatusClass(borrow.status)}">{borrow.status}</span>
+                                            <!-- 【重構】改用輔助函式取得 class 和 label -->
+                                            <span class="badge {statusInfo.className}">{statusInfo.label}</span>
                                         </td>
                                         <td class="text-end">
                                             {#if (borrow.status === 'borrowed' || borrow.status === 'overdue') && (borrow.user === currentUser?.id || currentUser?.role?.includes('admin'))}

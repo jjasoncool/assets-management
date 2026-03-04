@@ -39,6 +39,51 @@ export function getMaintenanceTypeInfo(type: string): {
 }
 
 /**
+ * 根據借用狀態獲取對應的顯示資訊
+ * @param status - 借用狀態 (borrowed, overdue, returned, pending)
+ * @returns 包含標籤、CSS class 和顏色的物件
+ */
+export function getBorrowStatusInfo(status: string): {
+	label: string;
+	className: string; // for Bootstrap badge background
+	color: string;     // for FullCalendar event color
+} {
+	switch (status) {
+		case 'borrowed':
+			return {
+				label: '借出中',
+				className: 'text-bg-primary',
+				color: '#0d6efd'
+			};
+		case 'overdue':
+			return {
+				label: '已逾期',
+				className: 'text-bg-danger',
+				color: '#dc3545'
+			};
+		case 'returned':
+			return {
+				label: '已歸還',
+				className: 'text-bg-success',
+				color: '#198754'
+			};
+		case 'pending':
+			return {
+				label: '待審核',
+				className: 'text-bg-warning',
+				color: '#ffc107'
+			};
+		default:
+			return {
+				label: status,
+				className: 'text-bg-secondary',
+				color: '#6c757d'
+			};
+	}
+}
+
+
+/**
  * 從後端取得短效期的 File Token (用於存取 Protected Files)
  */
 export async function getFileToken(): Promise<string> {

@@ -33,9 +33,17 @@ export const actions: Actions = {
         const assetId = formData.get('asset_id') as string;
         const completeDate = formData.get('complete_date') as string;
         const costIsSame = formData.get('cost_is_same') === 'on'; // Checkbox value is 'on'
-        const actualCost = Number(formData.get('actual_cost'));
         const estimatedCost = Number(formData.get('estimated_cost'));
-
+        
+        // 【修正】根據 costIsSame 的狀態決定 actualCost 的值
+        let actualCost: number;
+        if (costIsSame) {
+            // 如果勾選了「費用相符」，直接使用估算費用
+            actualCost = estimatedCost;
+        } else {
+            // 否則，從表單中讀取實際費用
+            actualCost = Number(formData.get('actual_cost'));
+        }
 
         // 處理多檔案上傳 (proof_images)
         const proofImages = formData.getAll('proof_images') as File[];
@@ -43,7 +51,7 @@ export const actions: Actions = {
         const validImages = proofImages.filter(f => f.size > 0 && f.name !== '');
 
         if (!recordId || !assetId || !completeDate || isNaN(actualCost)) {
-            return fail(400, { error: 'Missing required fields' });
+            return fail(400, { error: '缺少必要欄位或費用格式錯誤' });
         }
 
         // 根據費用選項，建立描述
@@ -68,7 +76,9 @@ export const actions: Actions = {
             return { success: true };
         } catch (error: any) {
             logger.error('Failed to complete maintenance:', error);
-            return fail(500, { error: 'Failed to complete maintenance' });
+            // 將後端原始錯誤訊息傳回前端，方便除錯
+            const rawError = error.response?.message || error.message || '未知錯誤';
+            return fail(500, { error: `結案失敗: ${rawError}` });
         }
     }
 };

@@ -1,5 +1,5 @@
 import { formatInTimeZone } from 'date-fns-tz';
-import { parseISO } from 'date-fns';
+import { parseISO, addDays } from 'date-fns';
 import { logger } from '$lib/utils/logger';
 
 /**
@@ -51,4 +51,25 @@ function getCurrentZonedDateString(): string {
 	return formatInTimeZone(new Date(), TIMEZONE, 'yyyy-MM-dd');
 }
 
-export { TIMEZONE, formatDateTime, formatDate, getCurrentZonedDateString };
+/**
+ * 為了 FullCalendar 的結束日期，將給定日期增加一天並格式化
+ * FullCalendar 的 all-day event end date 是 exclusive 的
+ * @param {string | Date | null | undefined} date - 日期物件或 ISO 格式的日期字串
+ * @returns {string | undefined} - 'yyyy-MM-dd' 格式的日期字串，或在輸入無效時回傳 undefined
+ */
+function getCalendarEndDate(date: string | Date | null | undefined): string | undefined {
+	if (!date) {
+		return undefined;
+	}
+	try {
+		const dateObj = typeof date === 'string' ? parseISO(date.replace(' ', 'T')) : date;
+		const addedDate = addDays(dateObj, 1);
+		// FullCalendar 只需要 yyyy-MM-dd，使用 formatInTimeZone 是為了與專案其他地方保持一致
+		return formatInTimeZone(addedDate, TIMEZONE, 'yyyy-MM-dd');
+	} catch (error) {
+		logger.error('[getCalendarEndDate] Error adding day to date:', { date, error });
+		return undefined;
+	}
+}
+
+export { TIMEZONE, formatDateTime, formatDate, getCurrentZonedDateString, getCalendarEndDate };
