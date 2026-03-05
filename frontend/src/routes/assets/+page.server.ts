@@ -77,7 +77,7 @@ export const actions: Actions = {
         const formData = await request.formData();
         const assetId = formData.get('asset') as string;
         const returnDate = formData.get('expected_return_date') as string;
-        const images = formData.getAll('borrow_images') as File[];
+        const images = formData.getAll('borrow_images').filter((f): f is File => f instanceof File && f.size > 0);
         const userId = formData.get('user') as string; // 讀取使用者 ID
 
         if (!assetId || !returnDate || !userId) {

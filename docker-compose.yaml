@@ -34,6 +34,7 @@ services:
       - POCKETBASE_URL=${POCKETBASE_URL}
       - PB_ADMIN_EMAIL=${PB_ADMIN_EMAIL}
       - PB_ADMIN_PASSWORD=${PB_ADMIN_PASSWORD}
+      - BODY_SIZE_LIMIT=26214400
     volumes:
       - ./frontend:/app
     networks:

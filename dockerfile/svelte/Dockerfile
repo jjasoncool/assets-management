@@ -12,7 +12,7 @@ ENV VITE_ALLOWED_HOSTS=$VITE_ALLOWED_HOSTS
 ENV PORT=3000
 
 # 複製 package.json 和 package-lock.json
-COPY frontend/package*.json ./
+COPY frontend/package.json frontend/pnpm-lock.yaml* ./
 
 # 安裝依賴
 RUN npm install -g pnpm
@@ -20,7 +20,7 @@ RUN npm install -g pnpm
 # 複製配置文件
 COPY frontend/svelte.config.js frontend/tsconfig.json frontend/vite.config.js ./
 
-# [新增] 必須複製原始碼，否則無法編譯
+# 複製原始碼
 COPY frontend/src ./src
 COPY frontend/static ./static
 
