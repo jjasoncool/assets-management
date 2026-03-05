@@ -2,6 +2,7 @@
     import { enhance } from '$app/forms';
     import type { Asset } from '$lib/types';
     import { formatDate, getCurrentZonedDateString } from '$lib/utils/datetime'; // 引入 datetime 工具函式
+    import { flatpickr } from '$lib/actions/flatpickr';
 
     // 定義 Props
     let { asset, currentUser, borrowableUsers = [], onsuccess, oncancel } = $props<{
@@ -99,12 +100,14 @@
             <div class="mb-3">
                 <label for="returnDate" class="form-label fw-bold">預計歸還日期 <span class="text-danger">*</span></label>
                 <input
-                    type="date"
+                    type="text"
                     class="form-control"
                     id="returnDate"
                     name="expected_return_date"
                     bind:value={expectedReturnDate}
-                    min={getCurrentZonedDateString()}
+                    use:flatpickr={{
+                        minDate: 'today'
+                    }}
                     required
                 />
             </div>

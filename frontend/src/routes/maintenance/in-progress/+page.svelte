@@ -7,6 +7,7 @@
     import { bs } from '$lib/stores';
     import type { PageData } from './$types';
     import type { Modal } from 'bootstrap';
+    import { flatpickr } from '$lib/actions/flatpickr';
     import { formatDate, getCurrentZonedDateString } from '$lib/utils/datetime';
 
     const { data } = $props<{ data: PageData }>();
@@ -277,11 +278,12 @@
                         <div class="mb-3">
                             <label for="complete_date" class="form-label fw-bold">完工日期 <span class="text-danger">*</span></label>
                             <input
-                                type="date"
+                                type="text"
                                 class="form-control"
                                 id="complete_date"
                                 name="complete_date"
                                 required
+                                use:flatpickr
                                 value={getCurrentZonedDateString()}
                             />
                         </div>

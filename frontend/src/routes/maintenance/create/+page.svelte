@@ -2,6 +2,7 @@
     import { enhance } from '$app/forms';
     import Navbar from '$lib/components/Navbar.svelte';
     import { getCurrentZonedDateString } from '$lib/utils/datetime';
+    import { flatpickr } from '$lib/actions/flatpickr';
 
     // Svelte 5 Runes: 接收 PageData 和 ActionData (form)
     let { data, form } = $props();
@@ -127,11 +128,12 @@
                                 <div class="col-md-6 mb-3">
                                     <label for="maintenance_date" class="form-label fw-bold">維護日期 <span class="text-danger">*</span></label>
                                     <input
-                                        type="date"
+                                        type="text"
                                         class="form-control"
                                         id="maintenance_date"
                                         name="maintenance_date"
                                         required
+                                        use:flatpickr
                                         value={getCurrentZonedDateString()}
                                     />
                                 </div>

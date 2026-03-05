@@ -6,6 +6,7 @@
 	import { browser } from '$app/environment';
 	import { enhance } from '$app/forms';
 	import type { ActionResult } from '@sveltejs/kit';
+	import { flatpickr } from '$lib/actions/flatpickr';
 
 	// Svelte 5 Props: 定義接收的資料型別，users 和 categories 改由外部傳入
 	let {
@@ -438,11 +439,12 @@
             <div class="col-md-4">
                 <label for="purchase_date" class="form-label small fw-bold text-secondary">購買日期</label>
                 <input
-                    type="date"
+                    type="text"
                     id="purchase_date"
                     name="purchase_date"
                     class="form-control shadow-none"
                     bind:value={formData.purchase_date}
+                    use:flatpickr
                 />
             </div>
             <div class="col-md-4">
