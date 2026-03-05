@@ -145,7 +145,7 @@
 
         <div class="row g-4">
             <div class="col-12 col-xl-4">
-                <div class="card shadow-sm bg-white bg-opacity-90 h-100">
+                <div class="card shadow-sm bg-white bg-opacity-90 h-100 mt-4">
                     <div class="card-header bg-white bg-opacity-90 d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0 fw-bold">清單檢視 (借還)</h5>
                         <span class="badge bg-secondary">
@@ -191,7 +191,7 @@
             </div>
 
             <div class="col-12 col-xl-8">
-                <div class="card shadow-sm bg-white bg-opacity-90 h-100">
+                <div class="card shadow-sm bg-white bg-opacity-90 h-100 mt-4">
                     <div class="card-body">
                         <div class="overflow-auto">
                             <div id="calendar"></div>

@@ -110,6 +110,7 @@
                         <thead class="table-light text-secondary small">
                             <tr>
                                 <th class="ps-4 py-3">維護日期</th>
+                                <th class="py-3">完成日期</th>
                                 <th class="py-3">資產名稱</th>
                                 <th class="py-3">維護類型</th>
                                 <th class="py-3">費用</th>
@@ -120,7 +121,7 @@
                         <tbody>
                             {#if records.length === 0}
                                 <tr>
-                                    <td colspan="6" class="text-center py-5">
+                                    <td colspan="7" class="text-center py-5">
                                         <div class="text-muted opacity-25 mb-2">
                                             <i class="mdi mdi-clipboard-text-off-outline fs-1"></i>
                                         </div>
@@ -146,6 +147,9 @@
                                 >
                                     <td class="ps-4 text-nowrap fw-medium">
                                         {formatDate(record.maintenance_date)}
+                                    </td>
+                                    <td class="text-nowrap">
+                                        {record.complete_date ? formatDate(record.complete_date) : '---'}
                                     </td>
                                     <td>
                                         <div class="d-flex flex-column">

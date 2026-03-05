@@ -6,7 +6,7 @@
     let currentUser = $derived($page.data.currentUser);
 </script>
 
-<nav class="navbar navbar-expand-lg navbar-light bg-light">
+<nav class="navbar navbar-expand-lg navbar-light bg-light mt-3">
     <div class="container-fluid">
         <a class="navbar-brand d-flex align-items-center" href="/">
             <i class="mdi mdi-office-building me-2"></i>
