@@ -1,8 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { getMaintenanceFormOptions } from '$lib/server/services/maintenanceService';
+import { createMaintenanceRecord, getMaintenanceFormOptions } from '$lib/server/services/maintenanceService';
 import { logger } from '$lib/utils/logger';
 import type { Actions, PageServerLoad } from './$types';
-import { Collections } from '$lib/types';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	try {
@@ -23,7 +22,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 export const actions: Actions = {
 	create: async ({ request, locals }) => {
 		const pb = locals.pb;
-		if (!pb) {
+		if (!pb.authStore.isValid || !locals.user) {
 			return fail(401, { error: 'Unauthorized' });
 		}
 
@@ -31,7 +30,8 @@ export const actions: Actions = {
 		formData.append('performed_by', locals.user.id);
 
 		try {
-			await pb.collection(Collections.MaintenanceRecords).create(formData);
+			// [修正] 呼叫 Service Function，而不是直接操作 DB
+			await createMaintenanceRecord(pb, formData);
 		} catch (error: any) {
 			logger.error('Failed to create maintenance record:', error);
 			const pbError = error?.data?.data;

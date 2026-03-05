@@ -21,6 +21,8 @@ export const flatpickr = (node: HTMLInputElement, options: Options = {}) => {
         // 確保節點仍然存在
         if (node) {
             instance = fp(node, {
+                disableMobile: true,
+                allowInput: true,
                 ...options, // 允許外部傳入的選項
                 // 覆寫 onChange 以整合 Svelte 的數據綁定
                 onChange: (selectedDates, dateStr, inst) => {

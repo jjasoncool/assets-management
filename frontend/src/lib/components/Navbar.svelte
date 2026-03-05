@@ -1,9 +1,11 @@
 <script lang="ts">
     import { page } from '$app/stores';
+    import { goto } from '$app/navigation';
     import { pb } from '../pocketbase';
 
     // Svelte 5: 使用 $derived 獲取當前頁面資料中的 currentUser
     let currentUser = $derived($page.data.currentUser);
+
 </script>
 
 <nav class="navbar navbar-expand-lg navbar-light bg-light mt-3">

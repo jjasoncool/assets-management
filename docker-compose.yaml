@@ -1,18 +1,19 @@
 services:
   pocketbase:
     build:
-      context: ./dockerfile/pocketbase  # 直接指向 pocketbase 資料夾
+      context: ./dockerfile/pocketbase
       args:
         PB_VERSION: ${PB_VERSION}
     expose:
       - "8090"
+    environment:
+      - TZ=Asia/Taipei
     volumes:
       # 把容器內的 pb_data 掛載出來，確保資料永久保存
       - ./pb_data:/pb/pb_data
       - ./pb_migrations:/pb/pb_migrations
       - ./pb_hooks:/pb/pb_hooks
-    # 這裡可以限制只有 50MB 記憶體，對 PocketBase 來說綽綽有餘
-    mem_limit: 128m
+    mem_limit: 512m
     container_name: pb-backend
     restart: always
     networks:
@@ -30,11 +31,10 @@ services:
     container_name: svelte-frontend
     restart: always
     environment:
-      - POCKETBASE_URL=${POCKETBASE_URL}  # 服務端使用的 PocketBase URL
+      - POCKETBASE_URL=${POCKETBASE_URL}
       - PB_ADMIN_EMAIL=${PB_ADMIN_EMAIL}
       - PB_ADMIN_PASSWORD=${PB_ADMIN_PASSWORD}
     volumes:
-      # 將主機的 frontend 掛載到容器的 /app
       - ./frontend:/app
     networks:
       - app-network

@@ -3,11 +3,12 @@ FROM alpine:latest
 
 ARG PB_VERSION=0.36.5
 
-# 安裝必要的工具 (unzip, ca-certificates 用於 HTTPS 下載)
+# 安裝必要的工具 (unzip, ca-certificates 用於 HTTPS 下載, tzdata 用於時區)
 RUN apk add --no-cache \
     unzip \
     ca-certificates \
-    wget
+    wget \
+    tzdata
 
 # 下載並解壓縮
 ADD https://github.com/pocketbase/pocketbase/releases/download/v${PB_VERSION}/pocketbase_${PB_VERSION}_linux_amd64.zip /tmp/pb.zip
