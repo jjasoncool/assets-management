@@ -76,7 +76,7 @@ export async function getCurrentBorrowedAssets(pb: PocketBase) {
     if (!user) throw new Error('用戶未登入');
 
     return await getBorrowRecords(pb, {
-      filter: `user = "${user.id}" && status = "borrowed"`,
+      filter: `user = "${user.id}" && (status = "borrowed" || status = "overdue")`,
       expand: 'asset,user'
     });
   } catch (error) {
