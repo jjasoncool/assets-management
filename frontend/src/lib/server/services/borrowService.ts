@@ -50,8 +50,13 @@ export async function getMyBorrowRecords(pb: PocketBase, options?: {
     if (!user) throw new Error('用戶未登入');
 
     let filter = `user = "${user.id}"`;
+    // [修正] 處理多狀態查詢，例如 "borrowed,overdue"
     if (options?.status) {
-      filter += ` && status = "${options.status}"`;
+        const statuses = options.status.split(',').map(s => s.trim()).filter(s => s);
+        if (statuses.length > 0) {
+            const statusFilter = statuses.map(s => `status = "${s}"`).join(' || ');
+            filter += ` && (${statusFilter})`;
+        }
     }
 
     return await getBorrowRecords(pb, {
@@ -265,6 +270,12 @@ export async function returnAsset(pb: PocketBase, borrowRecordId: string, return
 
     const borrowRecord = await pb.collection(Collections.BorrowRecords).getOne(borrowRecordId);
 
+    // 冪等性檢查：如果資產不是處於可歸還狀態，直接返回成功，避免重複操作或錯誤
+    if (borrowRecord.status !== 'borrowed' && borrowRecord.status !== 'overdue') {
+        logger.warn(`歸還操作被略過：資產狀態已為 "${borrowRecord.status}" (Record ID: ${borrowRecordId})`);
+        return borrowRecord as unknown as BorrowRecord;
+    }
+
     const userIsAdmin = isAdmin(user);
     const isBorrower = borrowRecord.user === user.id;
 
@@ -274,6 +285,7 @@ export async function returnAsset(pb: PocketBase, borrowRecordId: string, return
 
     const formData = new FormData();
     formData.append('status', 'returned');
+    formData.append('return_date', formatDateTime(new Date())); // 寫入實際歸還時間
 
     if (returnImages && returnImages.length > 0) {
       for (const file of returnImages) {

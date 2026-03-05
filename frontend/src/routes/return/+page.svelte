@@ -203,18 +203,18 @@
 									<label for="tom-select-asset" class="form-label fw-bold">要歸還的資產</label>
 
 									<!--
-										當 assetIdFromQuery 存在時，TomSelect 會被禁用。
-										由於 disabled 的欄位值不會被 form 提交，
-										我們在此加入一個 hidden input 來確保 recordId 能被正常傳送到後端。
+										TomSelect 不會自動更新原始 input 的 value，
+										因此我們使用一個 hidden input 來確保 selectedRecordId 能被正確提交。
 									-->
-									{#if assetIdFromQuery}
-										<input type="hidden" name="recordId" value={selectedRecordId} />
-									{/if}
+									<input type="hidden" name="recordId" value={selectedRecordId} />
 
+									<!--
+										這個 input 主要用於 TomSelect 的初始化，
+										移除 name 屬性以避免提交空值。
+									-->
 									<input
 										type="text"
 										id="tom-select-asset"
-										name="recordId"
 										bind:this={tomselectEl}
 										required={!assetIdFromQuery}
 										disabled={!!assetIdFromQuery}
