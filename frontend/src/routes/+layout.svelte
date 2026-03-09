@@ -8,7 +8,7 @@
     import { onMount } from 'svelte';
     import { browser } from '$app/environment';
     import { pb } from '$lib/pocketbase';
-    import { bs, Swal } from '$lib/stores';
+    import { bs, swal } from '$lib/stores';
 
     // 1. Svelte 5: 使用 $props 接收 server 傳來的資料
     let { data, children } = $props<{
@@ -37,7 +37,7 @@
                 import('sweetalert2')
             ]);
             bs.set(bootstrapModule);
-            Swal.set(sweetalert2Module.default);
+            swal.set(sweetalert2Module.default);
         }
     });
 </script>

@@ -4,7 +4,7 @@
     import { enhance } from '$app/forms';
     import Navbar from '$lib/components/Navbar.svelte';
     import BorrowForm from '$lib/components/BorrowForm.svelte';
-    import { bs, Swal } from '$lib/stores';
+    import { bs, swal } from '$lib/stores';
     import type { PageData } from './$types';
 
     // 1. 接收 Server 資料
@@ -47,7 +47,7 @@
     let bsInstance: any = null;
     let SwalInstance: any = null;
     bs.subscribe(value => bsInstance = value);
-    Swal.subscribe(value => SwalInstance = value);
+    swal.subscribe(value => SwalInstance = value);
 
     const statusOptions = [
         { value: '', label: '全部狀態' },
@@ -424,13 +424,49 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             {#if selectedAssetForBorrow}
-                <BorrowForm
-                    asset={selectedAssetForBorrow}
-                    borrowableUsers={data.borrowableUsers}
-                    currentUser={currentUser}
-                    onsuccess={handleBorrowSuccess}
-                    oncancel={() => borrowModalInstance?.hide()}
-                />
+                <form
+                    method="POST"
+                    action="?/borrow"
+                    enctype="multipart/form-data"
+                    use:enhance={() => {
+                        return async ({ result, update }) => {
+                            if (result.type === 'success') {
+                                handleBorrowSuccess();
+                            }
+                            await update();
+                        };
+                    }}
+                >
+                    <!--
+                        因為 BorrowForm 已經被簡化為僅包含共通欄位，
+                        所以我們在父層補上 modal-body, modal-footer, 以及專屬於此情境的隱藏欄位和資產資訊
+                    -->
+                    <div class="modal-body p-4">
+                        <!-- 隱藏欄位，傳遞要借用的資產 record ID -->
+                        <input type="hidden" name="asset" value={selectedAssetForBorrow.id} />
+
+                        <!-- 顯示資產資訊 -->
+                        <div class="mb-4">
+                            <h5 class="fw-bold">{selectedAssetForBorrow.name}</h5>
+                            <div class="text-muted small">資產編號: {selectedAssetForBorrow.asset_id}</div>
+                            <div class="text-muted small">品牌: {selectedAssetForBorrow.brand || '無'} / 型號: {selectedAssetForBorrow.model || '無'}</div>
+                        </div>
+
+                         <hr />
+
+                        <!-- 引用共通的表單欄位 -->
+                        <BorrowForm
+                            borrowableUsers={data.borrowableUsers}
+                            currentUser={currentUser}
+                        />
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                        <button type="submit" class="btn btn-primary">
+                            確認借用
+                        </button>
+                    </div>
+                </form>
             {/if}
         </div>
     </div>

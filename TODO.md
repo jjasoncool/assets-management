@@ -11,18 +11,20 @@
 ### 儀表板 (Dashboard)
 - **待辦事項:**
     - [ ] (功能) 擴充日曆功能，除了顯示借用事件外，也許可顯示預計的維護日期。
+    - [ ] 快速入口 用 barcode 直接掃 判斷
 
 ### 資產管理 (Asset Management)
 - **相關路徑:** `/assets`, `/asset-categories`
 - **待辦事項:**
     - [x] 圖片覆蓋問題
     - [ ] 新增資產詳細編號欄位 (擴充使用)
-
+    - [ ] EXCEL 新增大量資產
 
 ### 借還管理 (Borrow & Return Management)
 - **相關路徑:** `/borrow`, `/return`
 - **待辦事項:**
-    - *暫無*
+    - [ ] 借用獨立一個頁面 可以大量借用資產，拍攝照片全部共用
+    - [ ] 延期 延期通知
 
 ### 維護管理 (Maintenance Management)
 - **相關路徑:** `/maintenance`

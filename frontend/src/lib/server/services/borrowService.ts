@@ -157,6 +157,54 @@ export async function borrowAsset(
   }
 }
 
+
+/**
+ * 透過資產紀錄 ID (record id) 借出資產，支援單筆或多筆
+ *
+ */
+export async function borrowAssetsByIds(
+    pb: PocketBase,
+    assetIds: string[], // 這裡是資產的紀錄 ID 陣列 (e.g., ["a9b8c7d6e5f4", "g5h6i7j8k9l0"])
+    userId: string,
+    expectedReturnDate: string,
+    borrowImages?: File[]
+) {
+    const successfulRecords: BorrowRecord[] = [];
+    const failedAssets: { assetId: string; error: string }[] = [];
+
+    // 針對每一個傳入的 assetId (record ID) 進行處理
+    for (const assetId of assetIds) {
+        try {
+            // 直接呼叫單筆借用的函式
+            const record = await borrowAsset(
+                pb,
+                assetId, // 傳入的是資料庫紀錄的 ID
+                expectedReturnDate,
+                borrowImages,
+                userId
+            );
+            successfulRecords.push(record);
+
+        } catch (err: any) {
+            let errorMessage = err.message;
+            if (err instanceof Error && err.name === 'ClientResponseError') {
+                 errorMessage = `找不到對應的資產或該資產目前不可借用`;
+            }
+            logger.error(`[Multi-Borrow] Asset ID (${assetId}) 借用失敗:`, errorMessage);
+            failedAssets.push({ assetId, error: errorMessage });
+        }
+    }
+
+    // 如果有任何一筆失敗，就整理錯誤訊息並拋出例外
+    if (failedAssets.length > 0) {
+        const errorDetails = failedAssets.map(f => `ID ${f.assetId}: ${f.error}`).join('\n');
+        throw new Error(`部分資產借用失敗:\n${errorDetails}`);
+    }
+
+    // 如果全部成功，返回成功的紀錄
+    return successfulRecords;
+}
+
 /**
  * 獲取所有待處理的借用請求 (供管理員使用)
  */

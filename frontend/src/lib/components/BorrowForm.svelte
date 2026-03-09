@@ -1,140 +1,90 @@
 <script lang="ts">
-    import { enhance } from '$app/forms';
-    import type { Asset } from '$lib/types';
-    import { formatDate, getCurrentZonedDateString } from '$lib/utils/datetime'; // 引入 datetime 工具函式
-    import { flatpickr } from '$lib/actions/flatpickr';
+	import type { User } from '$lib/types';
+	import { formatDate } from '$lib/utils/datetime';
+	import { flatpickr } from '$lib/actions/flatpickr';
 
-    // 定義 Props
-    let { asset, currentUser, borrowableUsers = [], onsuccess, oncancel } = $props<{
-        asset: Asset,
-        currentUser?: any,
-        borrowableUsers?: any[],
-        onsuccess?: (record?: any) => void,
-        oncancel?: () => void
-    }>();
+	// =================================================================
+	// Props
+	// =================================================================
+	let {
+		currentUser,
+		borrowableUsers = [],
+		expectedReturnDate = ''
+	} = $props<{
+		currentUser: User | null;
+		borrowableUsers?: User[];
+		expectedReturnDate?: string;
+	}>();
 
-    let submitting = $state(false);
-    let error = $state<string | null>(null);
-    let expectedReturnDate = $state('');
-
-    // 計算預設歸還日期 (預設 7 天後)
-    const defaultDate = new Date();
-    defaultDate.setDate(defaultDate.getDate() + 7);
-    // 使用 formatDate 統一格式化邏輯，並確保時區正確
-    expectedReturnDate = formatDate(defaultDate);
-
-    function handleCancel() {
-        if (oncancel) oncancel();
-    }
+	// =================================================================
+	// Effects & Derived Logic
+	// =================================================================
+	// 計算預設歸還日期 (預設 7 天後), 如果外部沒有傳入值
+	$effect(() => {
+		if (!expectedReturnDate) {
+			const defaultDate = new Date();
+			defaultDate.setDate(defaultDate.getDate() + 7);
+			expectedReturnDate = formatDate(defaultDate);
+		}
+	});
 </script>
 
-{#if !asset.is_lendable}
-    <div class="modal-body">
-        <div class="alert alert-danger text-center">
-            <i class="mdi mdi-alert-circle-outline mdi-24px me-2"></i>
-            此資產目前不提供借用。
-        </div>
-    </div>
-    <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" onclick={handleCancel}>關閉</button>
-    </div>
-{:else}
-    <form
-        method="POST"
-        action="?/borrow"
-        enctype="multipart/form-data"
-        use:enhance={() => {
-            submitting = true;
-            error = null;
+<!--
+  這是一個 "Dumb Component"，僅包含借用表單的共通欄位。
+  它不包含 <form> 標籤或提交邏輯，以便能被彈性地組合在不同的父層表單中。
+-->
 
-            return async ({ result, update }) => {
-                submitting = false;
+<!-- 借用人欄位 -->
+<div class="mb-3">
+	<label for="user" class="form-label fw-bold">借用人</label>
+	{#if borrowableUsers && borrowableUsers.length > 1}
+		<select name="user" id="user" class="form-select">
+			{#each borrowableUsers as user}
+				<option value={user.id} selected={user.id === currentUser?.id}>
+					{user.name || user.email}
+				</option>
+			{/each}
+		</select>
+	{:else}
+		<input type="hidden" name="user" value={currentUser?.id} />
+		<input
+			type="text"
+			class="form-control"
+			value={currentUser?.name || currentUser?.email || '未知使用者'}
+			disabled
+			readonly
+		/>
+	{/if}
+</div>
 
-                if (result.type === 'success') {
-                    if (onsuccess) onsuccess(result.data);
-                    await update();
+<!-- 預計歸還日期 -->
+<div class="mb-3">
+	<label for="returnDate" class="form-label fw-bold"
+		>預計歸還日期 <span class="text-danger">*</span></label
+	>
+	<input
+		type="text"
+		class="form-control"
+		id="returnDate"
+		name="expected_return_date"
+		bind:value={expectedReturnDate}
+		use:flatpickr={{
+			minDate: 'today'
+		}}
+		required
+	/>
+</div>
 
-                } else if (result.type === 'failure') {
-                    const data = result.data as Record<string, any>;
-                    error = data?.error || '借用申請失敗';
-
-                } else if (result.type === 'error') {
-                    error = '發生系統錯誤，請稍後再試';
-                }
-            };
-        }}
-    >
-        <input type="hidden" name="asset" value={asset.id} />
-
-        <div class="modal-body">
-            {#if error}
-                <div class="alert alert-danger">{error}</div>
-            {/if}
-
-            <div class="mb-4">
-                <h5 class="fw-bold">{asset.name}</h5>
-                <div class="text-muted small">
-                    資產編號: {asset.asset_id}
-                </div>
-                <div class="text-muted small">
-                    品牌: {asset.brand || '無'} / 型號: {asset.model || '無'}
-                </div>
-            </div>
-
-            <div class="mb-3">
-                <label for="user" class="form-label fw-bold">借用人</label>
-                {#if borrowableUsers && borrowableUsers.length > 1}
-                    <select name="user" id="user" class="form-select">
-                        {#each borrowableUsers as user}
-                            <option value={user.id} selected={user.id === currentUser?.id}>
-                                {user.name || user.email}
-                            </option>
-                        {/each}
-                    </select>
-                {:else}
-                    <input type="hidden" name="user" value={currentUser?.id} />
-                    <input type="text" class="form-control" value="{currentUser?.name || currentUser?.email || '未知使用者'}" disabled readonly />
-                {/if}
-            </div>
-
-            <div class="mb-3">
-                <label for="returnDate" class="form-label fw-bold">預計歸還日期 <span class="text-danger">*</span></label>
-                <input
-                    type="text"
-                    class="form-control"
-                    id="returnDate"
-                    name="expected_return_date"
-                    bind:value={expectedReturnDate}
-                    use:flatpickr={{
-                        minDate: 'today'
-                    }}
-                    required
-                />
-            </div>
-
-            <div class="mb-3">
-                <label for="images" class="form-label fw-bold">借用時照片 (選填)</label>
-                <input
-                    type="file"
-                    class="form-control"
-                    id="images"
-                    name="borrow_images"
-                    accept="image/*"
-                    multiple
-                />
-                <div class="form-text">建議拍攝資產現況，以保障雙方權益。</div>
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" onclick={handleCancel} disabled={submitting}>取消</button>
-            <button type="submit" class="btn btn-primary" disabled={submitting}>
-                {#if submitting}
-                    <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                    處理中...
-                {:else}
-                    <i class="mdi mdi-check me-1"></i>確認借用
-                {/if}
-            </button>
-        </div>
-    </form>
-{/if}
+<!-- 上傳圖片 -->
+<div class="mb-3">
+	<label for="images" class="form-label fw-bold">借用時照片 (選填)</label>
+	<input
+		type="file"
+		class="form-control"
+		id="images"
+		name="borrow_images"
+		accept="image/*"
+		multiple
+	/>
+	<div class="form-text">建議拍攝資產現況，以保障雙方權益。</div>
+</div>

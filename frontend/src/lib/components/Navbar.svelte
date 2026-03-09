@@ -97,7 +97,16 @@
                         <li>
                             <a
                                 class="dropdown-item"
-                                class:active={$page.url.pathname.startsWith('/borrow')}
+                                class:active={$page.url.pathname === '/borrow'}
+                                href="/borrow"
+                                ><i class="mdi mdi-plus-box-outline me-2"></i>新增借用</a
+                            >
+                        </li>
+                        <li><hr class="dropdown-divider" /></li>
+                        <li>
+                            <a
+                                class="dropdown-item"
+                                class:active={$page.url.pathname === '/borrow/list'}
                                 href="/borrow/list"
                                 ><i class="mdi mdi-account-clock me-2"></i>已借用清單</a
                             >
