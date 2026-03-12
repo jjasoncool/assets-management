@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { pb } from '$lib/pocketbase';
-	import { Swal } from '$lib/stores';
+	import { swal } from '$lib/stores';
 	import BorrowForm from './BorrowForm.svelte';
 	import { logger } from '$lib/utils/logger';
 	import { browser } from '$app/environment';
@@ -127,7 +127,7 @@
 
 	function handleBorrowSuccess() {
 		borrowModalInstance?.hide();
-		$Swal.fire({
+		$swal?.fire({
 			title: '成功',
 			text: '資產借用申請成功！',
 			icon: 'success',
@@ -344,7 +344,7 @@
 			// 攔截 redirect (新增成功) 或 success (編輯成功)
 			// 先顯示 SweetAlert，再執行 update() 讓 SvelteKit 進行跳轉或更新頁面
 			if (result.type === 'redirect' || result.type === 'success') {
-				await $Swal.fire({
+				await $swal?.fire({
 					title: '成功！',
 					text: mode === 'create' ? '資產新增成功！' : '資產更新成功！',
 					icon: 'success',
@@ -784,11 +784,8 @@
             </div>
             {#if assetData}
                 <BorrowForm
-                    asset={assetData}
                     borrowableUsers={users}
                     currentUser={currentUser}
-                    onsuccess={handleBorrowSuccess}
-                    oncancel={() => borrowModalInstance?.hide()}
                 />
             {/if}
         </div>

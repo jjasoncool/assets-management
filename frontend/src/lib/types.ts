@@ -107,9 +107,11 @@ export interface BorrowRecord {
     user: string;
     borrow_date: string;
     expected_return_date: string;
+    return_date?: string;
     status: 'pending' | 'borrowed' | 'returned' | 'overdue' | 'rejected';
     borrow_images?: string[];
     return_images?: string[];
+    remark?: string; // 備註欄位，用於記錄延期歷史等資訊
     created: string;
     updated: string;
     expand?: {

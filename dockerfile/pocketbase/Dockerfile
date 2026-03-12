@@ -1,7 +1,7 @@
 # 使用最輕量的 Alpine Linux
 FROM alpine:latest
 
-ARG PB_VERSION=0.36.5
+ARG PB_VERSION=0.36.6
 
 # 安裝必要的工具 (unzip, ca-certificates 用於 HTTPS 下載, tzdata 用於時區)
 RUN apk add --no-cache \

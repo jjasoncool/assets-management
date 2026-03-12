@@ -3,6 +3,7 @@
     import { page, navigating } from '$app/state';
     import Navbar from '$lib/components/Navbar.svelte';
     import BorrowDetail from '$lib/components/BorrowDetail.svelte';
+    import ExtendBorrowModal from '$lib/components/ExtendBorrowModal.svelte';
     import { getFileToken, getBorrowStatusInfo } from '$lib/utils/helpers'; // 【重構】匯入新的輔助函式
 	import { formatDate } from '$lib/utils/datetime';
 
@@ -16,8 +17,9 @@
     let currentPage = $derived(data.page);
     let isLoading = $derived(Boolean(navigating.to));
 
-    // Detail Modal 元件參考
+    // Modal 元件參考
     let detailModal: ReturnType<typeof BorrowDetail>;
+    let extendModal: ReturnType<typeof ExtendBorrowModal>;
 
     function updateQueryParams(newParams: { page?: number, status?: string, viewMode?: string }) {
         const url = new URL(page.url);
@@ -57,12 +59,20 @@
     // 【重構】移除 getStatusClass 函式，改用全域的 getBorrowStatusInfo
 
     /**
-     * Action: 開啟 Modal 並獲取 Token
+     * Action: 開啟詳情 Modal 並獲取 Token
      */
     async function openRecordModal(record: any) {
         const fileToken = await getFileToken();
         // 呼叫子元件的 showModal 方法
         detailModal?.showModal(record, fileToken);
+    }
+
+    /**
+     * Action: 開啟延期 Modal
+     */
+    function openExtendModal(record: any, event: Event) {
+        event.stopPropagation(); // 防止觸發行的點擊事件
+        extendModal?.showModal(record);
     }
 </script>
 
@@ -141,6 +151,7 @@
                                     <th>資產名稱</th>
                                     <th>借用日期</th>
                                     <th>預計歸還</th>
+                                    <th>實際歸還</th>
                                     <th class="text-center">狀態</th>
                                     <th class="text-end">操作</th>
                                 </tr>
@@ -172,19 +183,30 @@
                                         </td>
                                         <td>{formatDate(borrow.borrow_date)}</td>
                                         <td>{formatDate(borrow.expected_return_date)}</td>
+                                        <td>{borrow.return_date ? formatDate(borrow.return_date) : '-'}</td>
                                         <td class="text-center">
                                             <!-- 【重構】改用輔助函式取得 class 和 label -->
                                             <span class="badge {statusInfo.className}">{statusInfo.label}</span>
                                         </td>
                                         <td class="text-end">
                                             {#if (borrow.status === 'borrowed' || borrow.status === 'overdue') && (borrow.user === currentUser?.id || currentUser?.role?.includes('admin'))}
-                                                <a
-                                                    href="/return?assetId={borrow.expand.asset.id}"
-                                                    class="btn btn-sm btn-outline-primary"
-                                                    onclick={(e) => e.stopPropagation()}
-                                                >
-                                                    <i class="mdi mdi-undo-variant me-1"></i> 歸還
-                                                </a>
+                                                <div class="btn-group" role="group">
+                                                    <button
+                                                        type="button"
+                                                        class="btn btn-sm btn-outline-warning"
+                                                        onclick={(e) => openExtendModal(borrow, e)}
+                                                        title="延期"
+                                                    >
+                                                        <i class="mdi mdi-calendar-clock me-1"></i> 延期
+                                                    </button>
+                                                    <a
+                                                        href="/return?assetId={borrow.expand.asset.id}"
+                                                        class="btn btn-sm btn-outline-primary"
+                                                        onclick={(e) => e.stopPropagation()}
+                                                    >
+                                                        <i class="mdi mdi-undo-variant me-1"></i> 歸還
+                                                    </a>
+                                                </div>
                                             {/if}
                                         </td>
                                     </tr>
@@ -249,6 +271,7 @@
 </div>
 
 <BorrowDetail bind:this={detailModal} />
+<ExtendBorrowModal bind:this={extendModal} />
 
 <style>
     .cursor-pointer {

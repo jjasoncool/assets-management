@@ -2,7 +2,7 @@
     import { enhance } from '$app/forms';
     import { pb } from '$lib/pocketbase';
     import Navbar from '$lib/components/Navbar.svelte';
-    import { bs, Swal } from '$lib/stores';
+    import { bs, swal } from '$lib/stores';
     import type { ActionData, PageData } from './$types';
 
     // 1. 接收 Server 傳來的資料
@@ -15,7 +15,7 @@
     let bsInstance: any = null;
     let SwalInstance: any = null;
     bs.subscribe(value => bsInstance = value);
-    Swal.subscribe(value => SwalInstance = value);
+    swal.subscribe(value => SwalInstance = value);
 
     // 狀態變數
     let isUpdatingProfile = $state(false);
