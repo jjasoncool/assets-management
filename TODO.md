@@ -23,13 +23,13 @@
 ### 借還管理 (Borrow & Return Management)
 - **相關路徑:** `/borrow`, `/return`
 - **待辦事項:**
-    - [ ] 借用獨立一個頁面 可以大量借用資產，拍攝照片全部共用
-    - [ ] 延期 延期通知
+    - [x] 借用獨立一個頁面 可以大量借用資產，拍攝照片全部共用
+    - [x] 延期 延期通知
 
 ### 維護管理 (Maintenance Management)
 - **相關路徑:** `/maintenance`
 - **待辦事項:**
-    - [ ] 類別新增 tooltip 說明維護類型
+    - [x] 類別新增 tooltip 說明維護類型
 
 ### 使用者與驗證 (User & Authentication)
 - **相關路徑:** `/login`, `/logout`, `/profile`
