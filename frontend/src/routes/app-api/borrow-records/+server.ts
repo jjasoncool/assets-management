@@ -17,7 +17,8 @@ export async function GET({ url, locals }: RequestEvent) {
             // 這裡先用簡單的篩選：只抓借出日期在範圍內的，或是狀態為 'borrowed' 的
             // 或是最單純的：不篩選，由前端過濾 (如果資料量不大)。
             // 為了效能，建議加上基本的日期篩選：
-            filter = `borrow_date >= "${start}" && borrow_date <= "${end}"`;
+            // Corrected filter to catch records spanning across months
+            filter = `borrow_date <= "${end}" && expected_return_date >= "${start}"`;
         }
 
         // 3. 查詢資料 (改用字串 'borrow_records' 避免 import 錯誤)

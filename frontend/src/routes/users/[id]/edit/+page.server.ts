@@ -69,7 +69,7 @@ export const actions: Actions = {
                 email,
                 department,
                 role,
-                modified_by: locals.user?.id // 記錄修改者
+                modified_by: locals.user?.name // 記錄修改者
             };
 
             // 呼叫 service 更新使用者

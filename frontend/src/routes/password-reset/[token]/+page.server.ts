@@ -6,7 +6,7 @@ import { logger } from '$lib/utils/logger';
  * 處理密碼重設表單的提交
  */
 export const actions: Actions = {
-	default: async ({ request, locals }) => {
+	default: async ({ request, locals, cookies }) => {
 		const formData = await request.formData();
 		const token = formData.get('token') as string;
 		const password = formData.get('password') as string;
@@ -38,6 +38,14 @@ export const actions: Actions = {
 
 			return fail(err.status || 500, { data: { password, passwordConfirm }, error: true, message });
 		}
+
+		// 密碼重設成功後，設定一個有時效性的 cookie
+		cookies.set('password-reset-success', 'true', {
+			path: '/',
+			httpOnly: true,
+			sameSite: 'lax',
+			maxAge: 60 * 5 // 5 分鐘
+		});
 
 		// 密碼重設成功後，重導向到登入頁面，並附帶一個成功提示的查詢參數
 		throw redirect(303, '/login?reset=success');

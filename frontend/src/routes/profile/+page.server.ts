@@ -1,5 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
+import { dev } from '$app/environment';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.pb.authStore.isValid) {
@@ -25,6 +26,9 @@ export const actions: Actions = {
 			const userId = locals.user?.id;
 			if (!userId) throw redirect(303, '/login');
 
+			// 設定 modified_by 為當前使用者
+			formData.append('modified_by', locals.user?.name);
+
 			// 1. 呼叫 PocketBase 更新
 			const updatedUser = await locals.pb.collection('users').update(userId, formData);
 
@@ -41,7 +45,7 @@ export const actions: Actions = {
 			cookies.set('pb_auth', authData, {
 				httpOnly: true,
 				path: '/',
-				secure: process.env.NODE_ENV === 'production',
+				secure: !dev,
 				sameSite: 'lax',
 				maxAge: maxAge
 			});
@@ -76,7 +80,8 @@ export const actions: Actions = {
 			await locals.pb.collection('users').update(userId, {
 				oldPassword,
 				password,
-				passwordConfirm
+				passwordConfirm,
+				modified_by: locals.user?.name
 			});
 
 			// 修改密碼後通常建議登出，或者您可以選擇不登出

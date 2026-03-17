@@ -1,5 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions } from './$types';
+import { dev } from '$app/environment';
 
 export const actions = {
 	login: async ({ request, locals, cookies }) => {
@@ -19,14 +20,24 @@ export const actions = {
 		try {
 			// 1. 在 Server 端執行 PocketBase 登入
 			// locals.pb 來自 hooks.server.ts
-			await locals.pb.collection('users').authWithPassword(email, password);
+			const { record: user } = await locals.pb.collection('users').authWithPassword(email, password);
+
+			// 檢查是否有密碼重設成功的 cookie
+			const resetSuccess = cookies.get('password-reset-success');
+			if (resetSuccess) {
+				// 更新 modified_by 為使用者自己的名字
+				await locals.pb.collection('users').update(user.id, { 'modified_by': user.name });
+				// 刪除 cookie，確保此邏輯只執行一次
+				cookies.delete('password-reset-success', { path: '/' });
+			}
+
 
 			// 2. 設定 HttpOnly Cookie
 			// 【修正重點】：直接使用 PocketBase 的 token 作為 cookie 的值
 			cookies.set('pb_auth', locals.pb.authStore.token, {
 				httpOnly: true,
 				path: '/',
-				secure: process.env.NODE_ENV === 'production',
+				secure: !dev,
 				sameSite: 'lax',
 				maxAge: 60 * 60 * 24 * 30 // 30 天
 			});
