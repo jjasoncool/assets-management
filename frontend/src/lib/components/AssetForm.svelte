@@ -292,515 +292,525 @@
 
 </script>
 
-<form
-	method="POST"
-	action={mode === 'create' ? '?/create' : '?/update'}
-	use:enhance={({ cancel, formData: formPayload }) => {
-		error = null;
-		const validationErrors = validateForm();
-		if (validationErrors.length > 0) {
-			error = validationErrors.join('；');
-			cancel();
-			return;
-		}
-
-		loading = true;
-
-		// [修改] 處理圖片上傳 (原子化操作: 同時處理刪除與新增)
-
-		// 1. 強制移除 'images' 欄位，避免覆蓋(Replace)行為
-		formPayload.delete('images');
-		formPayload.delete('images+'); // 預防性清除
-		// 不需要刪除 'images-'，因為我們要 append 它
-
-		// 2. 處理待刪除的圖片 (僅在編輯模式)
-		if (mode === 'edit' && imagesToDelete.length > 0) {
-			for (const filename of imagesToDelete) {
-				// 使用 'images-' 告訴 PocketBase 移除這些特定檔案
-				formPayload.append('images-', filename);
-			}
-		}
-
-		// 3. 處理新增的圖片
-		if (imageFiles.length > 0) {
-			// 編輯模式用 'images+' (附加)，新增模式用 'images' (設定)
-			const imageField = mode === 'edit' ? 'images+' : 'images';
-			for (const file of imageFiles) {
-				formPayload.append(imageField, file);
-			}
-		}
-
-		// 確保數值欄位正確傳遞 (避免 undefined)
-		if (formData.purchase_price !== undefined) formPayload.set('purchase_price', formData.purchase_price.toString());
-		if (formData.confidentiality_score !== undefined) formPayload.set('confidentiality_score', formData.confidentiality_score.toString());
-        if (formData.integrity_score !== undefined) formPayload.set('integrity_score', formData.integrity_score.toString());
-        if (formData.availability_score !== undefined) formPayload.set('availability_score', formData.availability_score.toString());
-		// [新增] 確保布林值被正確傳遞
-		formPayload.set('is_lendable', formData.is_lendable ? 'true' : 'false');
-
-
-		return async ({ result, update }) => {
-			loading = false;
-			// 攔截 redirect (新增成功) 或 success (編輯成功)
-			// 先顯示 SweetAlert，再執行 update() 讓 SvelteKit 進行跳轉或更新頁面
-			if (result.type === 'redirect' || result.type === 'success') {
-				await $swal?.fire({
-					title: '成功！',
-					text: mode === 'create' ? '資產新增成功！' : '資產更新成功！',
-					icon: 'success',
-					timer: 1500,
-					showConfirmButton: false
-				});
-				await update();
-			} else {
-				// 失敗情況，執行 update 以顯示錯誤 (透過上方的 $effect)
-				await update();
-			}
-		};
-	}}
-	enctype="multipart/form-data"
->
-    {#if mode === 'edit' && assetData?.id}
-		<input type="hidden" name="id" value={assetData.id} />
-	{/if}
-
-	<input type="hidden" name="total_risk_score" value={totalRiskScore} />
-
-	<div class="card-body p-4">
-		{#if error}
-			<div class="alert alert-danger alert-dismissible fade show" role="alert">
-				<i class="mdi mdi-alert-circle me-2"></i>
-				{error}
-				<button type="button" class="btn-close" onclick={() => error = null} aria-label="Close"></button>
+	<div class="card-header bg-white bg-opacity-90 py-3">
+		<h5 class="card-title mb-1 fw-bold">
+			{mode === 'edit' ? '編輯資產' : '新增資產'}
+		</h5>
+		{#if mode === 'edit'}
+			<div class="small text-muted">
+				資產編號: <span class="font-monospace">{assetData?.asset_id || 'N/A'}</span>
 			</div>
 		{/if}
+	</div>
+	<form
+		method="POST"
+		action={mode === 'create' ? '?/create' : '?/update'}
+		use:enhance={({ cancel, formData: formPayload }) => {
+			error = null;
+			const validationErrors = validateForm();
+			if (validationErrors.length > 0) {
+				error = validationErrors.join('；');
+				cancel();
+				return;
+			}
 
-		<div class="row g-3 mb-4">
-            <div class="col-md-6">
-                <label for="name" class="form-label small fw-bold text-secondary">資產名稱 *</label>
-                <input
-                    type="text"
-                    id="name"
-                    name="name"
-                    class="form-control shadow-none"
-                    bind:value={formData.name}
-                    placeholder="請輸入資產名稱"
-                />
-            </div>
-            <div class="col-md-6">
-                <label for="category" class="form-label small fw-bold text-secondary">資產類別 *</label>
-                <select
-                    id="category"
-                    name="category"
-                    class="form-select shadow-none"
-                    bind:value={formData.category}
-                >
-                    <option value="">請選擇資產類別</option>
-                    {#each categories as cat}
-                        <option value={cat.id}>{cat.name} ({cat.prefix})</option>
-                    {/each}
-                </select>
-            </div>
-            <div class="col-md-4">
-                <label for="brand" class="form-label small fw-bold text-secondary">品牌</label>
-                <input
-                    type="text"
-                    id="brand"
-                    name="brand"
-                    class="form-control shadow-none"
-                    bind:value={formData.brand}
-                    placeholder="例如：Dell、HP、Apple"
-                />
-            </div>
-            <div class="col-md-4">
-                <label for="model" class="form-label small fw-bold text-secondary">型號</label>
-                <input
-                    type="text"
-                    id="model"
-                    name="model"
-                    class="form-control shadow-none"
-                    bind:value={formData.model}
-                    placeholder="例如：Latitude 7420"
-                />
-            </div>
-            <div class="col-md-4">
-                <label for="serial_number" class="form-label small fw-bold text-secondary">序號</label>
-                <input
-                    type="text"
-                    id="serial_number"
-                    name="serial_number"
-                    class="form-control shadow-none"
-                    bind:value={formData.serial_number}
-                    placeholder="S/N 號碼"
-                />
-            </div>
-        </div>
-		<div class="row g-3 mb-4">
-            <div class="col-md-4">
-                <label for="purchase_date" class="form-label small fw-bold text-secondary">購買日期</label>
-                <input
-                    type="text"
-                    id="purchase_date"
-                    name="purchase_date"
-                    class="form-control shadow-none"
-                    bind:value={formData.purchase_date}
-                    use:flatpickr
-                />
-            </div>
-            <div class="col-md-4">
-                <label for="purchase_price" class="form-label small fw-bold text-secondary">購買價格</label>
-                <div class="input-group">
-                    <span class="input-group-text">NT$</span>
-                    <input
-                        type="text"
-                        inputmode="numeric"
-                        id="purchase_price_display"
-                        class="form-control shadow-none"
-                        value={formatPrice(formData.purchase_price)}
-                        oninput={handlePriceInput}
-                        onblur={formatPriceOnBlur}
-                        placeholder="0"
-                    />
-					<input type="hidden" name="purchase_price" value={formData.purchase_price ?? ''} />
-                </div>
-            </div>
-            <div class="col-md-4">
-                <label for="warranty_years" class="form-label small fw-bold text-secondary">保固年數</label>
-                <input
-                    type="number"
-                    id="warranty_years"
-                    name="warranty_years"
-                    class="form-control shadow-none"
-                    value={formData.warranty_years ?? ''}
-                    oninput={(e) => {
-                        formData.warranty_years = handleIntegerInput(e);
-                    }}
-                    placeholder="0"
-                    min="0"
-                    step="1"
-                />
-            </div>
-        </div>
-		<div class="row g-3 mb-4">
-            <div class="col-md-6">
-                <label for="location" class="form-label small fw-bold text-secondary">位置</label>
-                <input
-                    type="text"
-                    id="location"
-                    name="location"
-                    class="form-control shadow-none"
-                    bind:value={formData.location}
-                    placeholder="例如：辦公室、倉庫"
-                />
-            </div>
-            <div class="col-md-6">
-                <label for="department" class="form-label small fw-bold text-secondary">部門</label>
-                <input
-                    type="text"
-                    id="department"
-                    name="department"
-                    class="form-control shadow-none"
-                    bind:value={formData.department}
-                    placeholder="例如：資訊部、財務部"
-                />
-            </div>
-        </div>
-		<div class="row g-3 mb-4">
-            <div class="col-md-6">
-                <label for="assigned_to" class="form-label small fw-bold text-secondary">負責人</label>
-                <select
-                    id="assigned_to"
-                    name="assigned_to"
-                    class="form-select shadow-none"
-                    bind:value={formData.assigned_to}
-                >
-                    <option value="">請選擇負責人</option>
-                    {#each users as user}
-                        <option value={user.id}>{user.name || user.email}</option>
-                    {/each}
-                </select>
-            </div>
-            <div class="col-md-4">
-                <label for="status" class="form-label small fw-bold text-secondary">狀態</label>
-                <select
-                    id="status"
-                    name="status"
-                    class="form-select shadow-none"
-                    bind:value={formData.status}
-                >
-                    {#each statusOptions as opt}
-                        <option value={opt.value}>{opt.label}</option>
-                    {/each}
-                </select>
-            </div>
-			<div class="col-md-2">
-                <label for="is_lendable" class="form-label small fw-bold text-secondary">允許借用</label>
-				<div class="form-check form-switch form-switch-lg">
+			loading = true;
+
+			// [修改] 處理圖片上傳 (原子化操作: 同時處理刪除與新增)
+
+			// 1. 強制移除 'images' 欄位，避免覆蓋(Replace)行為
+			formPayload.delete('images');
+			formPayload.delete('images+'); // 預防性清除
+			// 不需要刪除 'images-'，因為我們要 append 它
+
+			// 2. 處理待刪除的圖片 (僅在編輯模式)
+			if (mode === 'edit' && imagesToDelete.length > 0) {
+				for (const filename of imagesToDelete) {
+					// 使用 'images-' 告訴 PocketBase 移除這些特定檔案
+					formPayload.append('images-', filename);
+				}
+			}
+
+			// 3. 處理新增的圖片
+			if (imageFiles.length > 0) {
+				// 編輯模式用 'images+' (附加)，新增模式用 'images' (設定)
+				const imageField = mode === 'edit' ? 'images+' : 'images';
+				for (const file of imageFiles) {
+					formPayload.append(imageField, file);
+				}
+			}
+
+			// 確保數值欄位正確傳遞 (避免 undefined)
+			if (formData.purchase_price !== undefined) formPayload.set('purchase_price', formData.purchase_price.toString());
+			if (formData.confidentiality_score !== undefined) formPayload.set('confidentiality_score', formData.confidentiality_score.toString());
+			if (formData.integrity_score !== undefined) formPayload.set('integrity_score', formData.integrity_score.toString());
+			if (formData.availability_score !== undefined) formPayload.set('availability_score', formData.availability_score.toString());
+			// [新增] 確保布林值被正確傳遞
+			formPayload.set('is_lendable', formData.is_lendable ? 'true' : 'false');
+
+
+			return async ({ result, update }) => {
+				loading = false;
+				// 攔截 redirect (新增成功) 或 success (編輯成功)
+				// 先顯示 SweetAlert，再執行 update() 讓 SvelteKit 進行跳轉或更新頁面
+				if (result.type === 'redirect' || result.type === 'success') {
+					await $swal?.fire({
+						title: '成功！',
+						text: mode === 'create' ? '資產新增成功！' : '資產更新成功！',
+						icon: 'success',
+						timer: 1500,
+						showConfirmButton: false
+					});
+					await update();
+				} else {
+					// 失敗情況，執行 update 以顯示錯誤 (透過上方的 $effect)
+					await update();
+				}
+			};
+		}}
+		enctype="multipart/form-data"
+	>
+		{#if mode === 'edit' && assetData?.id}
+			<input type="hidden" name="id" value={assetData.id} />
+		{/if}
+
+		<input type="hidden" name="total_risk_score" value={totalRiskScore} />
+
+		<div class="card-body p-4">
+			{#if error}
+				<div class="alert alert-danger alert-dismissible fade show" role="alert">
+					<i class="mdi mdi-alert-circle me-2"></i>
+					{error}
+					<button type="button" class="btn-close" onclick={() => error = null} aria-label="Close"></button>
+				</div>
+			{/if}
+
+			<div class="row g-3 mb-4">
+				<div class="col-md-6">
+					<label for="name" class="form-label small fw-bold text-secondary">資產名稱 *</label>
 					<input
-						class="form-check-input"
-						type="checkbox"
-						role="switch"
-						id="is_lendable"
-						name="is_lendable"
-						bind:checked={formData.is_lendable}
+						type="text"
+						id="name"
+						name="name"
+						class="form-control shadow-none"
+						bind:value={formData.name}
+						placeholder="請輸入資產名稱"
 					/>
-					<label class="form-check-label visually-hidden" for="is_lendable">
-						允許借用
-					</label>
+				</div>
+				<div class="col-md-6">
+					<label for="category" class="form-label small fw-bold text-secondary">資產類別 *</label>
+					<select
+						id="category"
+						name="category"
+						class="form-select shadow-none"
+						bind:value={formData.category}
+					>
+						<option value="">請選擇資產類別</option>
+						{#each categories as cat}
+							<option value={cat.id}>{cat.name} ({cat.prefix})</option>
+						{/each}
+					</select>
+				</div>
+				<div class="col-md-4">
+					<label for="brand" class="form-label small fw-bold text-secondary">品牌</label>
+					<input
+						type="text"
+						id="brand"
+						name="brand"
+						class="form-control shadow-none"
+						bind:value={formData.brand}
+						placeholder="例如：Dell、HP、Apple"
+					/>
+				</div>
+				<div class="col-md-4">
+					<label for="model" class="form-label small fw-bold text-secondary">型號</label>
+					<input
+						type="text"
+						id="model"
+						name="model"
+						class="form-control shadow-none"
+						bind:value={formData.model}
+						placeholder="例如：Latitude 7420"
+					/>
+				</div>
+				<div class="col-md-4">
+					<label for="serial_number" class="form-label small fw-bold text-secondary">序號</label>
+					<input
+						type="text"
+						id="serial_number"
+						name="serial_number"
+						class="form-control shadow-none"
+						bind:value={formData.serial_number}
+						placeholder="S/N 號碼"
+					/>
 				</div>
 			</div>
-        </div>
-		<div class="row g-3 mb-4">
-            <div class="col-md-12 mb-2">
-                <div class="alert alert-info small p-2 mb-0">
-                    <i class="mdi mdi-information-outline me-1"></i>
-                    說明：0 不適用 | 1 普通 | 3 內部使用 | 5-7 機密
-                </div>
-            </div>
-            <div class="col-md-4">
-                <label for="confidentiality_score" class="form-label small fw-bold text-secondary">機密性分數 (0-7)</label>
-                <input
-                    type="number"
-                    id="confidentiality_score"
-                    name="confidentiality_score"
-                    class="form-control shadow-none"
-                    value={formData.confidentiality_score ?? ''}
-                    placeholder="0-7"
-                    min="0"
-                    max="7"
-                    step="1"
-                    oninput={(e) => handleScoreInput(e, 'confidentiality_score')}
-                />
-            </div>
-            <div class="col-md-4">
-                <label for="integrity_score" class="form-label small fw-bold text-secondary">完整性分數 (0-7)</label>
-                <input
-                    type="number"
-                    id="integrity_score"
-                    name="integrity_score"
-                    class="form-control shadow-none"
-                    value={formData.integrity_score ?? ''}
-                    placeholder="0-7"
-                    min="0"
-                    max="7"
-                    step="1"
-                    oninput={(e) => handleScoreInput(e, 'integrity_score')}
-                />
-            </div>
-            <div class="col-md-4">
-                <label for="availability_score" class="form-label small fw-bold text-secondary">可用性分數 (0-7)</label>
-                <input
-                    type="number"
-                    id="availability_score"
-                    name="availability_score"
-                    class="form-control shadow-none"
-                    value={formData.availability_score ?? ''}
-                    placeholder="0-7"
-                    min="0"
-                    max="7"
-                    step="1"
-                    oninput={(e) => handleScoreInput(e, 'availability_score')}
-                />
-            </div>
-            <div class="col-md-12">
-                    <div class="alert alert-light small">
-                        風險總分：{totalRiskScore} / 21
-                        <div class="progress mt-2" style="height: 8px">
-                            <div
-                                class="progress-bar {progressBarClass}"
-                                style="width: {progressWidth}%"
-                                role="progressbar"
-                                aria-valuenow={progressWidth}
-                                aria-valuemin="0"
-                                aria-valuemax="100"
-                            ></div>
-                        </div>
-                    </div>
-            </div>
-        </div>
-		<div class="row mb-4">
-            <div class="col-12">
-                <label for="assetImages" class="form-label small fw-bold text-secondary">資產圖片</label>
-                <div class="input-group">
-                    <input
-                        type="file"
-                        id="assetImages"
-                        name="images"
-                        class="form-control shadow-none"
-                        accept="image/*"
-                        multiple
-                        onchange={handleImageUpload}
-                    />
-                </div>
-                <div class="form-text">
-                    支援 JPG、PNG、GIF、WebP 格式，單檔最大 5MB，最多 10 張
-                </div>
-            </div>
-            <div class="col-12">
-                <div class="row g-2 mt-2">
-                    {#each existingImages as image, index}
-                        <div class="col-md-2 col-3">
-                            <div class="position-relative">
-                                <div class="ratio ratio-1x1 w-100">
-                                <button
-                                    type="button"
-                                    class="img-button"
-                                    style="border: none; background: none; padding: 0; cursor: pointer;"
-                                    aria-label="查看現有圖片"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#imagePreviewModal"
-                                    onclick={() => openImageModal(image)}
-                                >
-                                    <img
-                                        src={image}
-                                        class="img-thumbnail w-100 h-100 object-fit-cover"
-                                        alt="現有圖片"
-                                    />
-                                </button>
-                                </div>
-                                <button
-                                    type="button"
-                                    class="btn btn-danger btn-sm position-absolute top-0 end-0"
-                                    style="transform: translate(25%, -25%);"
-                                    onclick={(e) => { e.stopPropagation(); removeExistingImage(index); }}
-                                    aria-label="刪除現有圖片"
-                                    title="刪除現有圖片"
-                                >
-                                    <span class="visually-hidden">刪除現有圖片</span>
-                                    &times;
-                                </button>
-                            </div>
-                        </div>
-                    {/each}
+			<div class="row g-3 mb-4">
+				<div class="col-md-4">
+					<label for="purchase_date" class="form-label small fw-bold text-secondary">購買日期</label>
+					<input
+						type="text"
+						id="purchase_date"
+						name="purchase_date"
+						class="form-control shadow-none"
+						bind:value={formData.purchase_date}
+						use:flatpickr
+					/>
+				</div>
+				<div class="col-md-4">
+					<label for="purchase_price" class="form-label small fw-bold text-secondary">購買價格</label>
+					<div class="input-group">
+						<span class="input-group-text">NT$</span>
+						<input
+							type="text"
+							inputmode="numeric"
+							id="purchase_price_display"
+							class="form-control shadow-none"
+							value={formatPrice(formData.purchase_price)}
+							oninput={handlePriceInput}
+							onblur={formatPriceOnBlur}
+							placeholder="0"
+						/>
+						<input type="hidden" name="purchase_price" value={formData.purchase_price ?? ''} />
+					</div>
+				</div>
+				<div class="col-md-4">
+					<label for="warranty_years" class="form-label small fw-bold text-secondary">保固年數</label>
+					<input
+						type="number"
+						id="warranty_years"
+						name="warranty_years"
+						class="form-control shadow-none"
+						value={formData.warranty_years ?? ''}
+						oninput={(e) => {
+							formData.warranty_years = handleIntegerInput(e);
+						}}
+						placeholder="0"
+						min="0"
+						step="1"
+					/>
+				</div>
+			</div>
+			<div class="row g-3 mb-4">
+				<div class="col-md-6">
+					<label for="location" class="form-label small fw-bold text-secondary">位置</label>
+					<input
+						type="text"
+						id="location"
+						name="location"
+						class="form-control shadow-none"
+						bind:value={formData.location}
+						placeholder="例如：辦公室、倉庫"
+					/>
+				</div>
+				<div class="col-md-6">
+					<label for="department" class="form-label small fw-bold text-secondary">部門</label>
+					<input
+						type="text"
+						id="department"
+						name="department"
+						class="form-control shadow-none"
+						bind:value={formData.department}
+						placeholder="例如：資訊部、財務部"
+					/>
+				</div>
+			</div>
+			<div class="row g-3 mb-4">
+				<div class="col-md-6">
+					<label for="assigned_to" class="form-label small fw-bold text-secondary">負責人</label>
+					<select
+						id="assigned_to"
+						name="assigned_to"
+						class="form-select shadow-none"
+						bind:value={formData.assigned_to}
+					>
+						<option value="">請選擇負責人</option>
+						{#each users as user}
+							<option value={user.id}>{user.name || user.email}</option>
+						{/each}
+					</select>
+				</div>
+				<div class="col-md-4">
+					<label for="status" class="form-label small fw-bold text-secondary">狀態</label>
+					<select
+						id="status"
+						name="status"
+						class="form-select shadow-none"
+						bind:value={formData.status}
+					>
+						{#each statusOptions as opt}
+							<option value={opt.value}>{opt.label}</option>
+						{/each}
+					</select>
+				</div>
+				<div class="col-md-2">
+					<label for="is_lendable" class="form-label small fw-bold text-secondary">允許借用</label>
+					<div class="form-check form-switch form-switch-lg">
+						<input
+							class="form-check-input"
+							type="checkbox"
+							role="switch"
+							id="is_lendable"
+							name="is_lendable"
+							bind:checked={formData.is_lendable}
+						/>
+						<label class="form-check-label visually-hidden" for="is_lendable">
+							允許借用
+						</label>
+					</div>
+				</div>
+			</div>
+			<div class="row g-3 mb-4">
+				<div class="col-md-12 mb-2">
+					<div class="alert alert-info small p-2 mb-0">
+						<i class="mdi mdi-information-outline me-1"></i>
+						說明：0 不適用 | 1 普通 | 3 內部使用 | 5-7 機密
+					</div>
+				</div>
+				<div class="col-md-4">
+					<label for="confidentiality_score" class="form-label small fw-bold text-secondary">機密性分數 (0-7)</label>
+					<input
+						type="number"
+						id="confidentiality_score"
+						name="confidentiality_score"
+						class="form-control shadow-none"
+						value={formData.confidentiality_score ?? ''}
+						placeholder="0-7"
+						min="0"
+						max="7"
+						step="1"
+						oninput={(e) => handleScoreInput(e, 'confidentiality_score')}
+					/>
+				</div>
+				<div class="col-md-4">
+					<label for="integrity_score" class="form-label small fw-bold text-secondary">完整性分數 (0-7)</label>
+					<input
+						type="number"
+						id="integrity_score"
+						name="integrity_score"
+						class="form-control shadow-none"
+						value={formData.integrity_score ?? ''}
+						placeholder="0-7"
+						min="0"
+						max="7"
+						step="1"
+						oninput={(e) => handleScoreInput(e, 'integrity_score')}
+					/>
+				</div>
+				<div class="col-md-4">
+					<label for="availability_score" class="form-label small fw-bold text-secondary">可用性分數 (0-7)</label>
+					<input
+						type="number"
+						id="availability_score"
+						name="availability_score"
+						class="form-control shadow-none"
+						value={formData.availability_score ?? ''}
+						placeholder="0-7"
+						min="0"
+						max="7"
+						step="1"
+						oninput={(e) => handleScoreInput(e, 'availability_score')}
+					/>
+				</div>
+				<div class="col-md-12">
+						<div class="alert alert-light small">
+							風險總分：{totalRiskScore} / 21
+							<div class="progress mt-2" style="height: 8px">
+								<div
+									class="progress-bar {progressBarClass}"
+									style="width: {progressWidth}%"
+									role="progressbar"
+									aria-valuenow={progressWidth}
+									aria-valuemin="0"
+									aria-valuemax="100"
+								></div>
+							</div>
+						</div>
+				</div>
+			</div>
+			<div class="row mb-4">
+				<div class="col-12">
+					<label for="assetImages" class="form-label small fw-bold text-secondary">資產圖片</label>
+					<div class="input-group">
+						<input
+							type="file"
+							id="assetImages"
+							name="images"
+							class="form-control shadow-none"
+							accept="image/*"
+							multiple
+							onchange={handleImageUpload}
+						/>
+					</div>
+					<div class="form-text">
+						支援 JPG、PNG、GIF、WebP 格式，單檔最大 5MB，最多 10 張
+					</div>
+				</div>
+				<div class="col-12">
+					<div class="row g-2 mt-2">
+						{#each existingImages as image, index}
+							<div class="col-md-2 col-3">
+								<div class="position-relative">
+									<div class="ratio ratio-1x1 w-100">
+									<button
+										type="button"
+										class="img-button"
+										style="border: none; background: none; padding: 0; cursor: pointer;"
+										aria-label="查看現有圖片"
+										data-bs-toggle="modal"
+										data-bs-target="#imagePreviewModal"
+										onclick={() => openImageModal(image)}
+									>
+										<img
+											src={image}
+											class="img-thumbnail w-100 h-100 object-fit-cover"
+											alt="現有圖片"
+										/>
+									</button>
+									</div>
+									<button
+										type="button"
+										class="btn btn-danger btn-sm position-absolute top-0 end-0"
+										style="transform: translate(25%, -25%);"
+										onclick={(e) => { e.stopPropagation(); removeExistingImage(index); }}
+										aria-label="刪除現有圖片"
+										title="刪除現有圖片"
+									>
+										<span class="visually-hidden">刪除現有圖片</span>
+										&times;
+									</button>
+								</div>
+							</div>
+						{/each}
 
-                    {#each imagePreviews as preview, index}
-                        <div class="col-md-2 col-3">
-                            <div class="position-relative">
-                                <div class="ratio ratio-1x1 w-100">
-                                <button
-                                    type="button"
-                                    class="img-button"
-                                    style="border: none; background: none; padding: 0; cursor: pointer;"
-                                    aria-label="查看新上傳的圖片"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#imagePreviewModal"
-                                    onclick={() => openImageModal(preview)}
-                                >
-                                    <img
-                                        src={preview}
-                                        class="img-thumbnail w-100 h-100 object-fit-cover"
-                                        alt="預覽"
-                                    />
-                                </button>
-                                </div>
-                                <button
-                                    type="button"
-                                    class="btn btn-danger btn-sm position-absolute top-0 end-0"
-                                    style="transform: translate(25%, -25%);"
-                                    onclick={(e) => { e.stopPropagation(); removeNewImage(index); }}
-                                    aria-label="刪除新上傳的圖片"
-                                    title="刪除新上傳的圖片"
-                                >
-                                    <span class="visually-hidden">刪除新上傳的圖片</span>
-                                    &times;
-                                </button>
-                            </div>
-                        </div>
-                    {/each}
-                </div>
-            </div>
-        </div>
-		<div class="row mb-4">
-            <div class="col-12">
-                <label for="notes" class="form-label small fw-bold text-secondary">備註</label>
-                <textarea
-                    id="notes"
-                    name="notes"
-                    class="form-control shadow-none"
-                    bind:value={formData.notes}
-                    rows="3"
-                    placeholder="其他補充說明..."
-                ></textarea>
-            </div>
-        </div>
+						{#each imagePreviews as preview, index}
+							<div class="col-md-2 col-3">
+								<div class="position-relative">
+									<div class="ratio ratio-1x1 w-100">
+									<button
+										type="button"
+										class="img-button"
+										style="border: none; background: none; padding: 0; cursor: pointer;"
+										aria-label="查看新上傳的圖片"
+										data-bs-toggle="modal"
+										data-bs-target="#imagePreviewModal"
+										onclick={() => openImageModal(preview)}
+									>
+										<img
+											src={preview}
+											class="img-thumbnail w-100 h-100 object-fit-cover"
+											alt="預覽"
+										/>
+									</button>
+									</div>
+									<button
+										type="button"
+										class="btn btn-danger btn-sm position-absolute top-0 end-0"
+										style="transform: translate(25%, -25%);"
+										onclick={(e) => { e.stopPropagation(); removeNewImage(index); }}
+										aria-label="刪除新上傳的圖片"
+										title="刪除新上傳的圖片"
+									>
+										<span class="visually-hidden">刪除新上傳的圖片</span>
+										&times;
+									</button>
+								</div>
+							</div>
+						{/each}
+					</div>
+				</div>
+			</div>
+			<div class="row mb-4">
+				<div class="col-12">
+					<label for="notes" class="form-label small fw-bold text-secondary">備註</label>
+					<textarea
+						id="notes"
+						name="notes"
+						class="form-control shadow-none"
+						bind:value={formData.notes}
+						rows="3"
+						placeholder="其他補充說明..."
+					></textarea>
+				</div>
+			</div>
 
-		<div class="row">
-			<div class="col-12">
-				<div class="d-flex justify-content-between">
-					<div>
-						<button type="button" class="btn btn-outline-secondary" onclick={onCancel}>
-							<i class="mdi mdi-arrow-left me-2"></i>
-							返回列表
-						</button>
-						{#if mode === 'edit' && formData.status === 'active' && formData.is_lendable}
-							<button type="button" class="btn btn-info ms-2" onclick={showBorrowModal}>
-								<i class="mdi mdi-hand-heart me-2"></i>
-								借用此資產
+			<div class="row">
+				<div class="col-12">
+					<div class="d-flex justify-content-between">
+						<div>
+							<button type="button" class="btn btn-outline-secondary" onclick={onCancel}>
+								<i class="mdi mdi-arrow-left me-2"></i>
+								返回列表
 							</button>
+							{#if mode === 'edit' && formData.status === 'active' && formData.is_lendable}
+								<button type="button" class="btn btn-info ms-2" onclick={showBorrowModal}>
+									<i class="mdi mdi-hand-heart me-2"></i>
+									借用此資產
+								</button>
+							{/if}
+						</div>
+
+						<button type="submit" class="btn btn-primary" disabled={loading}>
+							{#if loading}
+								<span class="spinner-border spinner-border-sm me-2" role="status"></span>
+								{mode === 'create' ? '新增中...' : '更新中...'}
+							{:else}
+								<i class="mdi {mode === 'create' ? 'mdi-plus' : 'mdi-content-save'} me-2"></i>
+								{mode === 'create' ? '新增資產' : '更新資產'}
+							{/if}
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</form>
+	<div class="modal fade" id="imagePreviewModal" tabindex="-1" aria-labelledby="imagePreviewModalLabel" aria-hidden="true">
+		<div class="modal-dialog modal-dialog-centered modal-lg">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title" id="imagePreviewModalLabel">圖片預覽</h5>
+					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+				</div>
+				<div class="modal-body" style="overflow-y: auto; max-height: 85vh;">
+					<div class="text-center">
+						{#if modalImageUrl}
+							<img src={modalImageUrl} class="img-fluid" style="max-width: 100%; height: auto;" alt="圖片預覽" />
 						{/if}
 					</div>
-
-					<button type="submit" class="btn btn-primary" disabled={loading}>
-						{#if loading}
-							<span class="spinner-border spinner-border-sm me-2" role="status"></span>
-							{mode === 'create' ? '新增中...' : '更新中...'}
-						{:else}
-							<i class="mdi {mode === 'create' ? 'mdi-plus' : 'mdi-content-save'} me-2"></i>
-							{mode === 'create' ? '新增資產' : '更新資產'}
-						{/if}
-					</button>
 				</div>
 			</div>
 		</div>
 	</div>
-</form>
 
-<div class="modal fade" id="imagePreviewModal" tabindex="-1" aria-labelledby="imagePreviewModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="imagePreviewModalLabel">圖片預覽</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" style="overflow-y: auto; max-height: 85vh;">
-                <div class="text-center">
-                    {#if modalImageUrl}
-                        <img src={modalImageUrl} class="img-fluid" style="max-width: 100%; height: auto;" alt="圖片預覽" />
-                    {/if}
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+	<div class="modal fade" id="borrowModal" tabindex="-1" aria-labelledby="borrowModalLabel" aria-hidden="true" bind:this={borrowModalElement}>
+		<div class="modal-dialog modal-dialog-centered">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title" id="borrowModalLabel">
+						<i class="mdi mdi-hand-heart me-2"></i>資產借用登記
+					</h5>
+					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+				</div>
+				{#if assetData}
+					<BorrowForm
+						borrowableUsers={users}
+						currentUser={currentUser}
+					/>
+				{/if}
+			</div>
+		</div>
+	</div>
 
-<div class="modal fade" id="borrowModal" tabindex="-1" aria-labelledby="borrowModalLabel" aria-hidden="true" bind:this={borrowModalElement}>
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="borrowModalLabel">
-                    <i class="mdi mdi-hand-heart me-2"></i>資產借用登記
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            {#if assetData}
-                <BorrowForm
-                    borrowableUsers={users}
-                    currentUser={currentUser}
-                />
-            {/if}
-        </div>
-    </div>
-</div>
+	<style>
+		/* Custom styles for a larger Bootstrap switch */
+		.form-switch-lg {
+			padding-left: 3.5rem; /* width + gutter */
+			padding-bottom: 2px; /* Fine-tune vertical alignment with other form controls */
+		}
+		.form-switch-lg .form-check-input {
+			width: 3rem;
+			height: 1.5rem;
+			margin-left: -3.5rem;
+		}
+	</style>
 
-<style>
-    /* Custom styles for a larger Bootstrap switch */
-    .form-switch-lg {
-        padding-left: 3.5rem; /* width + gutter */
-        padding-bottom: 2px; /* Fine-tune vertical alignment with other form controls */
-    }
-    .form-switch-lg .form-check-input {
-        width: 3rem;
-        height: 1.5rem;
-        margin-left: -3.5rem;
-    }
-</style>
