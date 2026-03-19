@@ -1,5 +1,5 @@
 import { error, fail, redirect, isRedirect } from '@sveltejs/kit';
-import { isAdmin, getUser, updateUser } from '$lib/server/services/userService';
+import { isAdmin, getUser, updateUserByAdmin } from '$lib/server/services/userService';
 import type { PageServerLoad, Actions } from './$types';
 import { logger } from '$lib/utils/logger';
 
@@ -43,7 +43,7 @@ export const actions: Actions = {
             const formData = await request.formData();
 
             name = formData.get('name') as string;
-            email = formData.get('email') as string;
+            email = (formData.get('email') as string)?.toLowerCase();
             department = formData.get('department') as string; // 取得部門
             role = formData.getAll('role') as string[]; // 角色可以是多選
 
@@ -69,17 +69,17 @@ export const actions: Actions = {
                 email,
                 department,
                 role,
-                modified_by: locals.user?.name // 記錄修改者
+                modified_by: locals.user?.id // 記錄修改者
             };
 
             // 呼叫 service 更新使用者
-            const result = await updateUser(locals.pb, params.id, userData);
+            const result = await updateUserByAdmin(locals.pb, params.id, userData);
 
-            if (!result.success) {
-                logger.error(`Failed to update user ID: ${params.id}. Error: ${result.error}`);
+            if (!result || !result.success) {
+                logger.error(`Failed to update user ID: ${params.id}. Error: ${result?.error}`);
                 return fail(500, {
                     data: { name, email, role, department },
-                    error: result.error || '伺服器發生未知錯誤'
+                    error: result?.error || '伺服器發生未知錯誤'
                 });
             }
 

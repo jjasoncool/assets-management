@@ -28,7 +28,7 @@ export const actions: Actions = {
             const formData = await request.formData();
 
             name = formData.get('name') as string;
-            email = formData.get('email') as string;
+            email = (formData.get('email') as string)?.toLowerCase();
             department = formData.get('department') as string; // 取得部門
             role = formData.getAll('role') as string[]; // 角色可以是多選
             const password = formData.get('password') as string;

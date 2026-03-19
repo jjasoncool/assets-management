@@ -16,6 +16,12 @@ export const actions: Actions = {
 	updateProfile: async ({ request, locals, cookies }) => {
 		const formData = await request.formData();
 
+		// 將 email 欄位強制轉為小寫
+		const email = formData.get('email');
+		if (email && typeof email === 'string') {
+			formData.set('email', email.toLowerCase());
+		}
+
 		// 處理 removeAvatar 邏輯：前端如果傳送 removeAvatar='true'，我們手動將 avatar 設為空
 		const removeAvatar = formData.get('removeAvatar') === 'true';
 		if (removeAvatar) {
@@ -27,7 +33,7 @@ export const actions: Actions = {
 			if (!userId) throw redirect(303, '/login');
 
 			// 設定 modified_by 為當前使用者
-			formData.append('modified_by', locals.user?.name);
+			formData.append('modified_by', locals.user?.id);
 
 			// 1. 呼叫 PocketBase 更新
 			const updatedUser = await locals.pb.collection('users').update(userId, formData);
@@ -81,7 +87,7 @@ export const actions: Actions = {
 				oldPassword,
 				password,
 				passwordConfirm,
-				modified_by: locals.user?.name
+				modified_by: locals.user?.id
 			});
 
 			// 修改密碼後通常建議登出，或者您可以選擇不登出

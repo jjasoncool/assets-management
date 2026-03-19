@@ -144,15 +144,29 @@ export async function createUser(pb: PocketBase, data: any) {
  * @param pb PocketBase 實例
  * @param id 使用者 ID
  * @param data 要更新的使用者資料
+ * @param options 選項: asAdmin - 是否以管理員權限更新，以修改 email 等受保護欄位
  */
-export async function updateUser(pb: PocketBase, id: string, data: any) {
-    try {
-        const updatedUser = await pb.collection('users').update(id, data);
-        return { success: true, user: JSON.parse(JSON.stringify(updatedUser)) };
-    } catch (err: any) {
-        logger.error(`更新使用者 ${id} 失敗:`, err);
-        return { success: false, error: err.message };
-    }
+export async function updateUserByAdmin(
+	pb: PocketBase,
+	id: string,
+	data: any
+): Promise<{ success: true; user: any } | { success: false; error: string }> {
+	const performUpdate = async (pbInstance: PocketBase) => {
+		const updatedUser = await pbInstance.collection('users').update(id, data);
+		return { success: true, user: JSON.parse(JSON.stringify(updatedUser)) as any } as const;
+	};
+
+	try {
+		const result = await withAdminAuth('userService.updateUserByAdmin', performUpdate);
+		if (result) {
+			return result;
+		} else {
+			return { success: false, error: 'Admin-privileged update failed. Check server logs.' };
+		}
+	} catch (err: any) {
+		logger.error(`更新使用者 ${id} 失敗:`, err);
+		return { success: false, error: err.message };
+	}
 }
 
 // =================================================================

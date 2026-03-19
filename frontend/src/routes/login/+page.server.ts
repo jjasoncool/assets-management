@@ -5,7 +5,7 @@ import { dev } from '$app/environment';
 export const actions = {
 	login: async ({ request, locals, cookies }) => {
 		const formData = await request.formData();
-		const email = formData.get('email') as string;
+		const email = (formData.get('email') as string)?.toLowerCase();
 		const password = formData.get('password') as string;
 
 		// 簡單的服務端驗證
@@ -26,7 +26,7 @@ export const actions = {
 			const resetSuccess = cookies.get('password-reset-success');
 			if (resetSuccess) {
 				// 更新 modified_by 為使用者自己的名字
-				await locals.pb.collection('users').update(user.id, { 'modified_by': user.name });
+				await locals.pb.collection('users').update(user.id, { 'modified_by': user.id });
 				// 刪除 cookie，確保此邏輯只執行一次
 				cookies.delete('password-reset-success', { path: '/' });
 			}
