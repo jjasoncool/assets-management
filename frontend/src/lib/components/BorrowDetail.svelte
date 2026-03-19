@@ -113,6 +113,20 @@
                                     <span class="fw-medium text-success">{formatDate(selectedRecord.return_date)}</span>
                                 </div>
                             {/if}
+
+                            <!-- [新增] 顯示事由/備註欄位 -->
+                            {#if selectedRecord.remark}
+                                <hr class="my-3">
+                                <div class="mb-3">
+                                    <span class="text-muted small d-block mb-1">事由 / 備註</span>
+                                    <div
+                                        class="p-2 bg-light bg-opacity-75 border rounded small"
+                                        style="white-space: pre-wrap; word-wrap: break-word; max-height: 150px; overflow-y: auto;"
+                                    >
+                                        {selectedRecord.remark}
+                                    </div>
+                                </div>
+                            {/if}
                         </div>
 
                         <div class="col-md-7">

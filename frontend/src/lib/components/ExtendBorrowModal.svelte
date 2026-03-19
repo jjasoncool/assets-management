@@ -3,6 +3,7 @@
     import { flatpickr } from '$lib/actions/flatpickr';
     import type { Modal } from 'bootstrap';
     import { bs, swal } from '$lib/stores';
+	import { formatDate } from '$lib/utils/datetime';
 
     // 內部狀態控制
     let modalElement: HTMLDivElement;
@@ -20,13 +21,26 @@
     let flatpickrOptions = $derived.by(() => {
         if (!selectedRecord) return {};
 
-        const currentExpectedDate = new Date(selectedRecord.expected_return_date);
-        const minDate = new Date(currentExpectedDate);
-        minDate.setDate(minDate.getDate() + 1); // 最小日期為當前日期的隔天
+		// 最小可選日期：必須是當前還期的隔天，但如果已逾期，則至少是明天
+		const tomorrow = new Date();
+		tomorrow.setDate(tomorrow.getDate() + 1);
+
+		const dayAfterCurrentReturn = new Date(selectedRecord.expected_return_date);
+		dayAfterCurrentReturn.setDate(dayAfterCurrentReturn.getDate() + 1);
+
+		const minDate = new Date(Math.max(tomorrow.getTime(), dayAfterCurrentReturn.getTime()));
+
+		// 最大可選日期：MAX(當前應還日期, 今天) + 1個月
+		const currentReturnDate = new Date(selectedRecord.expected_return_date);
+		const today = new Date();
+		const baseDate = new Date(Math.max(currentReturnDate.getTime(), today.getTime()));
+		const maxDate = new Date(baseDate);
+		maxDate.setMonth(maxDate.getMonth() + 1);
 
         return {
             dateFormat: 'Y-m-d',
             minDate: minDate,
+			maxDate: maxDate,
             locale: {
                 firstDayOfWeek: 1,
                 weekdays: {
@@ -156,7 +170,7 @@ function handleResult({ result }: any) {
                                 required
                                 disabled={isSubmitting}
                             />
-                            <small class="text-muted">新日期必須晚於當前預計歸還日期</small>
+                            <small class="text-muted">延期上限為一個月，最晚可延期至 {formatDate(flatpickrOptions.maxDate)}</small>
                         </div>
 
                         <div class="mb-3">

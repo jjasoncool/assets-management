@@ -46,29 +46,31 @@ export const actions: Actions = {
     create: async ({ request, locals }) => {
         const formData = await request.formData();
 
-        // [修改] 從表單中獲取資料 (可能為多筆資產)
+        // 從表單中獲取資料 (可能為多筆資產)
         const assetIds = formData.getAll('asset_ids') as string[];
         const returnDate = formData.get('expected_return_date') as string;
         const images = formData.getAll('borrow_images').filter((f): f is File => f instanceof File && f.size > 0);
         const userId = formData.get('user') as string;
+        const remark = formData.get('remark') as string;
 
-        // [修改] 欄位驗證
-        if (assetIds.length === 0 || !returnDate || !userId) {
-            logger.error('驗證失敗', { assetIds, returnDate, userId });
+        // 欄位驗證 (加入 remark)
+        if (assetIds.length === 0 || !returnDate || !userId || !remark) {
+            logger.error('驗證失敗', { assetIds, returnDate, userId, remark });
             return fail(400, {
                 data: Object.fromEntries(formData),
-                error: '請至少選擇一項資產，並填寫預計歸還日期和借用人。'
+                error: '請至少選擇一項資產，並填寫預計歸還日期、借用人與事由。'
             });
         }
 
         try {
-            // [修改] 呼叫支援多筆的 Service Function
+            // 呼叫支援多筆的 Service Function (傳入 remark)
             await borrowAssetsByIds(
                 locals.pb as unknown as PocketBase,
                 assetIds, // 直接傳入 ID 陣列
                 userId,
                 returnDate,
-                images
+                images,
+                remark
             );
             return { success: true, message: `已成功建立 ${assetIds.length} 筆借用紀錄！` };
         } catch (err: any) {

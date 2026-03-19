@@ -21,6 +21,18 @@
     let detailModal: ReturnType<typeof BorrowDetail>;
     let extendModal: ReturnType<typeof ExtendBorrowModal>;
 
+    /**
+     * [新增] 檢查紀錄是否在建立後 24 小時內，允許編輯
+     * @param createdDate 紀錄的建立時間 (ISO 格式字串)
+     * @returns 如果可編輯則為 true，否則為 false
+     */
+    function isEditable(createdDate: string): boolean {
+        const created = new Date(createdDate);
+        const now = new Date();
+        const diffInHours = (now.getTime() - created.getTime()) / (1000 * 60 * 60);
+        return diffInHours <= 24;
+    }
+
     function updateQueryParams(newParams: { page?: number, status?: string, viewMode?: string }) {
         const url = new URL(page.url);
         if (newParams.page !== undefined) {
@@ -159,6 +171,9 @@
                             <tbody>
                                 {#each recordsResult.items as borrow (borrow.id)}
                                     {@const statusInfo = getBorrowStatusInfo(borrow.status)}
+                                    {@const canOperate = (borrow.user === currentUser?.id || currentUser?.role?.includes('admin'))}
+                                    {@const editable = isEditable(borrow.created) && canOperate}
+
                                     <tr
                                         class:table-warning={borrow.status === 'pending'}
                                         class:table-danger={borrow.status === 'overdue'}
@@ -189,8 +204,17 @@
                                             <span class="badge {statusInfo.className}">{statusInfo.label}</span>
                                         </td>
                                         <td class="text-end">
-                                            {#if (borrow.status === 'borrowed' || borrow.status === 'overdue') && (borrow.user === currentUser?.id || currentUser?.role?.includes('admin'))}
-                                                <div class="btn-group" role="group">
+                                            <div class="btn-group" role="group">
+                                                {#if editable}
+                                                    <a
+                                                        href="/borrow/{borrow.id}/edit"
+                                                        class="btn btn-sm btn-outline-secondary"
+                                                        onclick={(e) => e.stopPropagation()}
+                                                        title="編輯 (24小時內)"
+                                                    >
+                                                        <i class="mdi mdi-pencil me-1"></i> 編輯
+                                                    </a>
+                                                {:else if (borrow.status === 'borrowed' || borrow.status === 'overdue') && canOperate}
                                                     <button
                                                         type="button"
                                                         class="btn btn-sm btn-outline-warning"
@@ -206,8 +230,8 @@
                                                     >
                                                         <i class="mdi mdi-undo-variant me-1"></i> 歸還
                                                     </a>
-                                                </div>
-                                            {/if}
+                                                {/if}
+                                            </div>
                                         </td>
                                     </tr>
                                 {/each}

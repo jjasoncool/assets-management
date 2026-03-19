@@ -1,7 +1,7 @@
 import type PocketBase from 'pocketbase';
 import { logger } from '$lib/utils/logger';
-import { formatDateTime } from '$lib/utils/datetime';
-import { Collections, type BorrowRecord } from '$lib/types'; // [修正] 引入 Collections Enum
+import { formatDateTime, formatDate } from '$lib/utils/datetime';
+import { Collections, type BorrowRecord, type Asset } from '$lib/types'; // [修正] 引入 Collections Enum
 import { getAsset, updateAsset } from './assetService';
 import { isAdmin } from './userService';
 
@@ -36,6 +36,25 @@ export async function getBorrowRecords(pb: PocketBase, listOptions?: {
         throw error;
     }
 }
+
+/**
+ * 透過 ID 獲取單筆借用紀錄
+ * @param pb PocketBase 實例
+ * @param id 借用紀錄的 ID
+ * @returns 返回單筆借用紀錄
+ */
+export async function getBorrowRecordById(pb: PocketBase, id: string) {
+	try {
+		const record = await pb.collection(Collections.BorrowRecords).getOne(id, {
+			expand: 'asset,user'
+		});
+		return record as unknown as BorrowRecord;
+	} catch (error) {
+		logger.error(`[BorrowService] 透過 ID (${id}) 獲取借用紀錄失敗:`, error);
+		throw error;
+	}
+}
+
 
 /**
  * 獲取當前認證用戶的借還記錄
@@ -98,11 +117,23 @@ export async function borrowAsset(
     assetId: string,
     expectedReturnDate: string,
     borrowImages?: File[],
-    borrowerId?: string
+    borrowerId?: string,
+    remark?: string
 ) {
     try {
         const currentUser = pb.authStore.record;
         if (!currentUser) throw new Error('用戶未登入');
+
+		// [修正] 驗證：預計歸還日期不得超過三個月
+		const today = new Date();
+		today.setHours(0, 0, 0, 0); // 標準化至當天零時
+		const maxReturnDate = new Date(today);
+		maxReturnDate.setMonth(maxReturnDate.getMonth() + 3);
+		const requestedReturnDate = new Date(expectedReturnDate);
+
+		if (requestedReturnDate > maxReturnDate) {
+			throw new Error('預計歸還日期最多只能設定為三個月內');
+		}
 
         let finalUserId = currentUser.id;
 
@@ -130,10 +161,15 @@ export async function borrowAsset(
         const formData = new FormData();
         formData.append('asset', assetId);
         formData.append('user', finalUserId); // 使用最終確認的 user ID
-        // 使用 formatDateTime 統一時間格式與時區
-        formData.append('borrow_date', formatDateTime(new Date()));
+        // [修正] 使用 toISOString() 確保存入標準 UTC 時間
+        formData.append('borrow_date', new Date().toISOString());
         formData.append('expected_return_date', expectedReturnDate);
         formData.append('status', targetStatus);
+
+        // 如果有提供事由，則加入表單
+        if (remark) {
+            formData.append('remark', remark);
+        }
 
         if (borrowImages && borrowImages.length > 0) {
             for (const file of borrowImages) {
@@ -167,7 +203,8 @@ export async function borrowAssetsByIds(
     assetIds: string[], // 這裡是資產的紀錄 ID 陣列 (e.g., ["a9b8c7d6e5f4", "g5h6i7j8k9l0"])
     userId: string,
     expectedReturnDate: string,
-    borrowImages?: File[]
+    borrowImages?: File[],
+    remark?: string
 ) {
     const successfulRecords: BorrowRecord[] = [];
     const failedAssets: { assetId: string; error: string }[] = [];
@@ -181,7 +218,8 @@ export async function borrowAssetsByIds(
                 assetId, // 傳入的是資料庫紀錄的 ID
                 expectedReturnDate,
                 borrowImages,
-                userId
+                userId,
+                remark
             );
             successfulRecords.push(record);
 
@@ -204,6 +242,56 @@ export async function borrowAssetsByIds(
     // 如果全部成功，返回成功的紀錄
     return successfulRecords;
 }
+
+/**
+ * 更新一筆借用紀錄
+ * @param pb PocketBase 實例
+ * @param id 借用紀錄 ID
+ * @param formData 包含更新資料的 FormData 物件
+ * @returns 返回更新後的借用紀錄
+ */
+export async function updateBorrowRecord(pb: PocketBase, id: string, formData: FormData) {
+	try {
+		const currentUser = pb.authStore.record;
+		if (!currentUser) throw new Error('用戶未登入');
+
+		const record = await getBorrowRecordById(pb, id);
+
+		// 權限檢查：僅允許紀錄本人或管理員編輯
+		const isOwner = record.user === currentUser.id;
+		const userIsAdmin = isAdmin(currentUser);
+		if (!isOwner && !userIsAdmin) {
+			throw new Error('權限不足，無法編輯此紀錄');
+		}
+
+        // 時間檢查：建立時間超過 24 小時則不允許編輯
+		const createdDate = new Date(record.created);
+		const now = new Date();
+		const hoursDiff = (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60);
+		if (hoursDiff > 24) {
+			throw new Error('編輯時限已過 (超過 24 小時)，無法更新');
+		}
+
+        // 紀錄更新操作
+        const editorName = currentUser.name || currentUser.email;
+        const editLog = `\n\n[編輯] ${formatDateTime(now)} 由 ${editorName} 更新。`;
+
+        // 將編輯紀錄附加到現有備註中
+        const currentRemark = formData.get('remark') as string || record.remark || '';
+        formData.set('remark', currentRemark + editLog);
+
+		const updatedRecord = await pb
+			.collection(Collections.BorrowRecords)
+			.update(id, formData);
+
+		logger.log(`[BorrowService] 成功更新借用紀錄 ID: ${id}`);
+		return updatedRecord as unknown as BorrowRecord;
+	} catch (error) {
+		logger.error(`[BorrowService] 更新借用紀錄 ID (${id}) 失敗:`, error);
+		throw error;
+	}
+}
+
 
 /**
  * 獲取所有待處理的借用請求 (供管理員使用)
@@ -239,8 +327,8 @@ export async function approveBorrow(pb: PocketBase, borrowRecordId: string) {
 
         const updatedRecord = await pb.collection(Collections.BorrowRecords).update(borrowRecordId, {
             status: 'borrowed',
-            // 使用 formatDateTime 統一時間格式與時區
-            borrow_date: formatDateTime(new Date())
+            // [修正] 使用 toISOString() 確保存入標準 UTC 時間
+            borrow_date: new Date().toISOString()
         });
 
         if (record.asset) {
@@ -333,7 +421,8 @@ export async function returnAsset(pb: PocketBase, borrowRecordId: string, return
 
         const formData = new FormData();
         formData.append('status', 'returned');
-        formData.append('return_date', formatDateTime(new Date())); // 寫入實際歸還時間
+        // [修正] 使用 toISOString() 確保存入標準 UTC 時間
+        formData.append('return_date', new Date().toISOString());
 
         if (returnImages && returnImages.length > 0) {
             for (const file of returnImages) {
@@ -432,13 +521,31 @@ export async function extendBorrowRecord(
             throw new Error(`此記錄狀態為 ${borrowRecord.status}，無法延期`);
         }
 
-        // 4. 日期驗證：新日期必須晚於當前預計歸還日期
-        const currentExpectedDate = new Date(borrowRecord.expected_return_date);
-        const newExpectedDate = new Date(newExpectedReturnDate);
+		// 4. [REVISED] 日期驗證
+		const newExpectedDate = new Date(newExpectedReturnDate);
 
-        if (newExpectedDate <= currentExpectedDate) {
-            throw new Error('新的歸還日期必須晚於當前預計歸還日期');
-        }
+		// 驗證 1: 新的歸還日期必須晚於當前預計歸還日期
+		if (newExpectedDate <= new Date(borrowRecord.expected_return_date)) {
+			throw new Error('新的歸還日期必須晚於當前預計歸還日期');
+		}
+
+		// 驗證 2: 新的歸還日期不能超過 MAX(當前應還日期, 今天) + 1個月
+		const currentReturnDate = new Date(borrowRecord.expected_return_date);
+		const today = new Date();
+
+		// 取較晚的日期作為基準
+		const baseDate = currentReturnDate > today ? currentReturnDate : today;
+
+		// 計算最大允許的延期日期
+		const maxAllowedDate = new Date(baseDate);
+		maxAllowedDate.setMonth(maxAllowedDate.getMonth() + 1);
+
+		// 為避免時區或毫秒問題，將最大日期設為一個月後的日子的 23:59:59
+		maxAllowedDate.setHours(23, 59, 59, 999);
+
+		if (newExpectedDate > maxAllowedDate) {
+			throw new Error(`延期上限為一個月，最晚只能延到 ${formatDate(maxAllowedDate)}`);
+		}
 
         // 5. 建立延期記錄文字
         const extensionTimestamp = formatDateTime(new Date());
@@ -480,4 +587,48 @@ export async function extendBorrowRecord(
         logger.error('延期借用記錄發生例外錯誤:', error);
         throw error;
     }
+}
+
+/**
+ * [新增] 刪除一筆借用紀錄
+ * @param pb PocketBase 實例
+ * @param id 借用紀錄 ID
+ */
+export async function deleteBorrowRecord(pb: PocketBase, id: string) {
+	try {
+		const currentUser = pb.authStore.record;
+		if (!currentUser) throw new Error('用戶未登入');
+
+		const record = await getBorrowRecordById(pb, id);
+        const asset = record.expand?.asset as Asset;
+
+		// 權限檢查：僅允許紀錄本人或管理員刪除
+		const isOwner = record.user === currentUser.id;
+		const userIsAdmin = isAdmin(currentUser);
+		if (!isOwner && !userIsAdmin) {
+			throw new Error('權限不足，無法刪除此紀錄');
+		}
+
+		// 時間檢查：建立時間超過 24 小時則不允許刪除
+		const createdDate = new Date(record.created);
+		const now = new Date();
+		const hoursDiff = (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60);
+		if (hoursDiff > 24) {
+			throw new Error('刪除時限已過 (超過 24 小時)，無法刪除');
+		}
+
+        // 如果關聯的資產狀態為 'borrowed'，則將其還原為 'active'
+        if (asset && asset.status === 'borrowed') {
+            await updateAsset(pb, asset.id, { status: 'active' });
+            logger.log(`[BorrowService] 刪除借用紀錄 (${id}) 的同時，已將資產 (${asset.id}) 狀態還原為 active`);
+        }
+
+		// 刪除借用紀錄
+		await pb.collection(Collections.BorrowRecords).delete(id);
+		logger.log(`[BorrowService] 成功刪除借用紀錄 ID: ${id}`);
+
+	} catch (error) {
+		logger.error(`[BorrowService] 刪除借用紀錄 ID (${id}) 失敗:`, error);
+		throw error;
+	}
 }

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { enhance } from '$app/forms';
 	import Navbar from '$lib/components/Navbar.svelte';
 	import BorrowForm from '$lib/components/BorrowForm.svelte';
@@ -156,13 +156,6 @@
 			scanner.clear().catch((err) => logger.warn('銷毀組件時自動停止掃描失敗(可忽略):', err));
 		}
 	});
-
-	// =================================================================
-	// Handlers
-	// =================================================================
-	function handleSuccess() {
-		goto('/borrow/list');
-	}
 </script>
 
 <svelte:head>
@@ -195,10 +188,19 @@
 					use:enhance={() => {
 						submitting = true;
 						return async ({ result }) => {
-							if (result.type === 'success') {
-								handleSuccess();
-							}
 							submitting = false;
+							if (result.type === 'success') {
+								await $swal?.fire({
+									title: '成功!',
+									text: '借用紀錄已成功建立。',
+									icon: 'success',
+									timer: 1500,
+									showConfirmButton: false
+								});
+								// 使所有 server load 資料失效，確保列表頁重新載入
+								await invalidateAll();
+								goto('/borrow/list');
+							}
 						};
 					}}
 				>
