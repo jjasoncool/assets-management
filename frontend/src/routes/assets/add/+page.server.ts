@@ -16,7 +16,7 @@ export const load: PageServerLoad = async ({ locals }) => {
         // 1. 獲取所有資產類別 (來自 AssetService)
         // 2. 獲取使用者列表 (來自 UserService，僅管理員需要完整列表)
         const categoriesPromise = getAllAssetCategories(pb);
-        const usersPromise = isAdmin(user) ? getUsersList(pb) : Promise.resolve(user ? [user] : []);
+        const usersPromise = getUsersList(pb, { asAdmin: true });
 
         const [categories, borrowableUsers] = await Promise.all([
             categoriesPromise,

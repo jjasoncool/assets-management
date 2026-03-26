@@ -18,7 +18,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
         const [asset, categories, borrowableUsers, fileToken] = await Promise.all([
             getAsset(pb as unknown as PocketBase, id),
             getAllAssetCategories(pb as unknown as PocketBase),
-            isAdmin(user) ? getUsersList(pb as unknown as PocketBase) : Promise.resolve(user ? [user] : []),
+            getUsersList(pb as unknown as PocketBase, { asAdmin: true }),
             pb.files.getToken()
         ]);
 

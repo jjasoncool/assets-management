@@ -22,7 +22,7 @@ export async function getAssets(pb: PocketBase, page = 1, perPage = 20, options?
       {
         filter: options?.filter || '',
         sort: options?.sort || '-created',
-        expand: options?.expand || 'category,assigned_to'
+        expand: 'category,assigned_to' // 強制展開，確保保管人與分類資訊總是存在
       }
     );
     return records;

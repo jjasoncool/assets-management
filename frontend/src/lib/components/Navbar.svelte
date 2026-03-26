@@ -1,18 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
 	import { pb } from '../pocketbase';
 
 	// Svelte 5: 使用 $derived 獲取當前頁面資料中的 currentUser
 	let currentUser = $derived($page.data.currentUser);
-
-	function clearAssetFiltersAndGo(event: MouseEvent) {
-		event.preventDefault();
-		if (typeof sessionStorage !== 'undefined') {
-			sessionStorage.removeItem('assetFilters');
-		}
-		goto('/assets');
-	}
 </script>
 
 <nav class="navbar navbar-expand-lg navbar-light bg-light mt-3">
@@ -64,7 +55,6 @@
                                 class="dropdown-item"
                                 class:active={$page.url.pathname.startsWith('/assets')}
                                 href="/assets"
-                                onclick={clearAssetFiltersAndGo}
                                 ><i class="mdi mdi-format-list-bulleted me-2"></i>資產清單</a
                             >
                         </li>

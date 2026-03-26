@@ -29,6 +29,10 @@
 		onCancel?: () => void
 	}>();
 
+	// [新增] 判斷是否為唯讀模式
+	// 條件：處於編輯模式，且當前使用者不是管理員
+	const isReadonly = $derived(mode === 'edit' && currentUser && !currentUser.role?.includes('admin'));
+
 	// Form state
 	let loading = $state(false);
 	let error = $state<string | null>(null);
@@ -85,7 +89,7 @@
 	let existingImages = $state<string[]>([]);
 	let imagesToDelete = $state<string[]>([]);
 
-	// Initialization
+	// Initialization: 只處理 Modal 的生命週期
 	$effect(() => {
 		if (browser) {
 			import('bootstrap').then(({ Modal }) => {
@@ -94,19 +98,6 @@
 				}
 			});
 		}
-
-		// 初始化邏輯：移除客戶端撈取，僅處理編輯模式的資料回填
-		async function init() {
-			try {
-				if (mode === 'edit' && assetData) {
-					await initializeEditForm();
-				}
-			} catch (err) {
-				logger.error('Failed to initialize form:', err);
-				error = err instanceof Error ? err.message : '初始化失敗';
-			}
-		}
-		init();
 
 		return () => {
 			borrowModalInstance?.dispose();
@@ -119,6 +110,24 @@
 			}
 		}
 	});
+
+	// Form Initialization Effect: 監聽 assetData 的變化來初始化表單
+	// 這是修正客戶端導航問題的關鍵
+	$effect(() => {
+		async function initializeForm() {
+			try {
+				// 當處於編輯模式且 assetData 屬性存在時，才進行初始化
+				if (mode === 'edit' && assetData) {
+					await initializeEditForm();
+				}
+			} catch (err) {
+				logger.error('Failed to initialize form:', err);
+				error = err instanceof Error ? err.message : '初始化失敗';
+			}
+		}
+		initializeForm();
+	});
+
 
 	// Modal handlers
 	function showBorrowModal() {
@@ -142,6 +151,13 @@
 
 	// Initialize form for editing
 	async function initializeEditForm() {
+		// [關鍵修復] 每次重新初始化時，完整重設所有相關狀態，避免殘留
+		error = null;
+		imageFiles = [];
+		imagePreviews = [];
+		imagesToDelete = [];
+		existingImages = [];
+
 		let formattedPurchaseDate = '';
 		if (assetData.purchase_date) {
 			try {
@@ -395,6 +411,7 @@
 						class="form-control shadow-none"
 						bind:value={formData.name}
 						placeholder="請輸入資產名稱"
+						readonly={isReadonly}
 					/>
 				</div>
 				<div class="col-md-6">
@@ -404,12 +421,17 @@
 						name="category"
 						class="form-select shadow-none"
 						bind:value={formData.category}
+						disabled={isReadonly}
 					>
 						<option value="">請選擇資產類別</option>
 						{#each categories as cat}
 							<option value={cat.id}>{cat.name} ({cat.prefix})</option>
 						{/each}
 					</select>
+					<!-- [新增] 當欄位為唯讀時，新增一個隱藏的 input 來提交表單值 -->
+					{#if isReadonly}
+						<input type="hidden" name="category" value={formData.category} />
+					{/if}
 				</div>
 				<div class="col-md-4">
 					<label for="brand" class="form-label small fw-bold text-secondary">品牌</label>
@@ -420,6 +442,7 @@
 						class="form-control shadow-none"
 						bind:value={formData.brand}
 						placeholder="例如：Dell、HP、Apple"
+						readonly={isReadonly}
 					/>
 				</div>
 				<div class="col-md-4">
@@ -431,6 +454,7 @@
 						class="form-control shadow-none"
 						bind:value={formData.model}
 						placeholder="例如：Latitude 7420"
+						readonly={isReadonly}
 					/>
 				</div>
 				<div class="col-md-4">
@@ -442,6 +466,7 @@
 						class="form-control shadow-none"
 						bind:value={formData.serial_number}
 						placeholder="S/N 號碼"
+						readonly={isReadonly}
 					/>
 				</div>
 			</div>
@@ -454,7 +479,8 @@
 						name="purchase_date"
 						class="form-control shadow-none"
 						bind:value={formData.purchase_date}
-						use:flatpickr
+						use:flatpickr={{ clickOpens: !isReadonly }}
+						readonly={isReadonly}
 					/>
 				</div>
 				<div class="col-md-4">
@@ -470,6 +496,7 @@
 							oninput={handlePriceInput}
 							onblur={formatPriceOnBlur}
 							placeholder="0"
+							readonly={isReadonly}
 						/>
 						<input type="hidden" name="purchase_price" value={formData.purchase_price ?? ''} />
 					</div>
@@ -488,6 +515,7 @@
 						placeholder="0"
 						min="0"
 						step="1"
+						readonly={isReadonly}
 					/>
 				</div>
 			</div>
@@ -504,7 +532,7 @@
 					/>
 				</div>
 				<div class="col-md-6">
-					<label for="department" class="form-label small fw-bold text-secondary">部門</label>
+					<label for="department" class="form-label small fw-bold text-secondary">專責部門</label>
 					<input
 						type="text"
 						id="department"
@@ -517,18 +545,24 @@
 			</div>
 			<div class="row g-3 mb-4">
 				<div class="col-md-6">
-					<label for="assigned_to" class="form-label small fw-bold text-secondary">負責人</label>
+					<label for="assigned_to" class="form-label small fw-bold text-secondary">保管人</label>
 					<select
 						id="assigned_to"
 						name="assigned_to"
 						class="form-select shadow-none"
 						bind:value={formData.assigned_to}
+						disabled={isReadonly}
 					>
-						<option value="">請選擇負責人</option>
+						<option value="">請選擇保管人</option>
 						{#each users as user}
 							<option value={user.id}>{user.name || user.email}</option>
 						{/each}
 					</select>
+					<!-- [新增] 當欄位為唯讀時，新增一個隱藏的 input 來提交表單值 -->
+					<!-- 這樣可以防止 disabled 的 select 欄位在提交時被忽略，導致數據被清空 -->
+					{#if isReadonly}
+						<input type="hidden" name="assigned_to" value={formData.assigned_to} />
+					{/if}
 				</div>
 				<div class="col-md-4">
 					<label for="status" class="form-label small fw-bold text-secondary">狀態</label>
@@ -802,6 +836,11 @@
 	</div>
 
 	<style>
+		/* 當表單控制項為唯讀時，顯示「禁止」游標，以模擬 disabled 的外觀 */
+		.form-control[readonly] {
+			cursor: not-allowed;
+		}
+
 		/* Custom styles for a larger Bootstrap switch */
 		.form-switch-lg {
 			padding-left: 3.5rem; /* width + gutter */
@@ -813,4 +852,3 @@
 			margin-left: -3.5rem;
 		}
 	</style>
-

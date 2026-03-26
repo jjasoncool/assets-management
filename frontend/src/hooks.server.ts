@@ -1,78 +1,72 @@
 import { redirect } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit';
-import { dev } from '$app/environment';
 import { createPocketBaseInstance } from '$lib/pocketbase';
+import { dev } from '$app/environment';
+import { logger } from '$lib/utils/logger';
 
 // 定義不需要保護的路由
 const publicRoutes = ['/login', '/password-reset'];
 
 export const handle: Handle = async ({ event, resolve }) => {
-  const { url, cookies } = event;
+    const { url } = event;
 
-  // 為每個請求創建新的 PocketBase 實例 (避免狀態污染)
-  const pb = createPocketBaseInstance();
+    // 為每個請求創建新的 PocketBase 實例
+    event.locals.pb = createPocketBaseInstance();
 
-  // 從 cookies 中獲取 PocketBase auth token
-  const allCookies = cookies.getAll();
-  const tokenValue = cookies.get('pb_auth');
+    // 從請求的 cookie 字串中載入 auth store
+    // 這是處理驗證的官方推薦方法，可以正確解析 token 和 model
+    event.locals.pb.authStore.loadFromCookie(event.request.headers.get('cookie') || '');
 
-  // 只在開發環境顯示敏感日誌
-  const isDev = dev;
-  if (isDev) {
-    console.log(`[SERVER] ${url.pathname} - Token value:`, tokenValue ? 'EXISTS' : 'NOT FOUND');
-    console.log(`[SERVER] ${url.pathname} - Token content:`, tokenValue?.substring(0, 20) + '...');
-    console.log(`[SERVER] ${url.pathname} - All cookies:`, allCookies.map(c => `${c.name}=${c.value?.substring(0, 20)}...`));
-  }
+    if (dev) {
+        logger.debug(`[HOOKS] ${url.pathname} - Auth state after loadFromCookie.`, {
+            isValid: event.locals.pb.authStore.isValid,
+            token: event.locals.pb.authStore.token?.substring(0, 20) + '...'
+        });
+    }
 
-  if (tokenValue) {
     try {
-      // tokenValue 現在是純 token 字串，使用 save 方法載入
-      pb.authStore.save(tokenValue, null);
-
-      // 驗證 token 是否有效並刷新用戶資料
-      await pb.collection('users').authRefresh();
-      
-      if (isDev) {
-        console.log(`[SERVER] ${url.pathname} - Auth refreshed, isValid:`, pb.authStore.isValid);
-      }
-    } catch (error) {
-      if (isDev) {
-        console.warn(`[SERVER] ${url.pathname} - Invalid token from cookie, clearing auth`, error);
-      }
-      // Token 無效，清空 auth store
-      pb.authStore.clear();
-      cookies.delete('pb_auth', { path: '/' });
+        // 在載入 cookie 後，驗證 token 是否仍然有效，如果有效，刷新它
+        if (event.locals.pb.authStore.isValid) {
+            if (dev) logger.debug(`[HOOKS] ${url.pathname} - Token is valid, attempting auth refresh...`);
+            await event.locals.pb.collection('users').authRefresh();
+            if (dev) logger.debug(`[HOOKS] ${url.pathname} - Auth refresh successful.`);
+        }
+    } catch (err) {
+        if (dev) logger.warn(`[HOOKS] ${url.pathname} - Auth refresh failed, clearing auth store.`, { error: err });
+        // 如果 token 無效或刷新失敗，清除 auth store
+        event.locals.pb.authStore.clear();
     }
-  } else {
-    if (isDev) {
-      console.log(`[SERVER] ${url.pathname} - No token found`);
+
+    // 如果已登入且訪問登入頁面，重定向到重定向參數或首頁
+    if (url.pathname === '/login' && event.locals.pb.authStore.isValid) {
+        const redirectTo = url.searchParams.get('redirect');
+        if (redirectTo && redirectTo !== '/login') {
+            throw redirect(302, decodeURIComponent(redirectTo));
+        } else {
+            throw redirect(302, '/');
+        }
     }
-  }
 
-  // 如果已登入且訪問登入頁面，重定向到重定向參數或首頁
-  if (url.pathname === '/login' && pb.authStore.isValid) {
-    const redirectTo = url.searchParams.get('redirect');
-    if (redirectTo && redirectTo !== '/login') {
-      throw redirect(302, decodeURIComponent(redirectTo));
-    } else {
-      throw redirect(302, '/');
+    // 檢查是否為公開路由
+    const isPublicRoute = publicRoutes.some(route =>
+        url.pathname.startsWith(route)
+    );
+
+    // 如果不是公開路由且未登入，重定向到登入頁面
+    if (!isPublicRoute && !event.locals.pb.authStore.isValid) {
+        if (dev) logger.warn(`[HOOKS] ${url.pathname} - Unauthorized access attempt, redirecting to login.`);
+        throw redirect(302, `/login?redirect=${encodeURIComponent(url.pathname)}`);
     }
-  }
 
-  // 檢查是否為公開路由
-  const isPublicRoute = publicRoutes.some(route =>
-    url.pathname.startsWith(route)
-  );
+    // 將用戶資料模型放入 locals，以便在後續的 server load 函數中訪問
+    event.locals.user = event.locals.pb.authStore.model;
 
-  // 如果不是公開路由且未登入，重定向到登入頁面
-  if (!isPublicRoute && !pb.authStore.isValid) {
-    throw redirect(302, `/login?redirect=${encodeURIComponent(url.pathname)}`);
-  }
+    // 繼續處理請求，等待回應生成
+    const response = await resolve(event);
 
-  // 將用戶資料添加到 locals (可在 +layout.server.ts 或 +page.server.ts 中使用)
-  event.locals.pb = pb;
-  event.locals.user = pb.authStore.model;
+    // 處理完畢後，將最新的 auth store 狀態（可能已刷新）寫回 cookie
+    // `exportToCookie` 會處理 `httpOnly` 等安全設定
+    response.headers.append('set-cookie', event.locals.pb.authStore.exportToCookie({ httpOnly: true, secure: !dev, sameSite: 'lax' }));
 
-  // 繼續處理請求
-  return resolve(event);
+    return response;
 };

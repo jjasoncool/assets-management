@@ -62,7 +62,8 @@
 
     // --- Filter 持久化 ---
     $effect(() => {
-        if (typeof sessionStorage !== 'undefined') {
+        // 關鍵修正：確保這個 effect 只在資產列表頁作用
+        if (typeof sessionStorage !== 'undefined' && page.url.pathname === '/assets') {
             const assetFilters = sessionStorage.getItem('assetFilters');
             if (page.url.search) {
                 sessionStorage.setItem('assetFilters', page.url.search);
@@ -321,10 +322,10 @@
                             <th>狀態</th>
                             <th class="d-none d-lg-table-cell">位置</th>
                             <th class="d-none d-lg-table-cell">保管人</th>
-                            <th class="cursor-pointer d-none d-lg-table-cell" onclick={() => handleSort('created')}>
-                                建立日期
-                                {#if currentSort === 'created'} <i class="mdi mdi-arrow-up text-primary"></i> {/if}
-                                {#if currentSort === '-created'} <i class="mdi mdi-arrow-down text-primary"></i> {/if}
+                            <th class="cursor-pointer d-none d-lg-table-cell" onclick={() => handleSort('purchase_date')}>
+                                購買日期
+                                {#if currentSort === 'purchase_date'} <i class="mdi mdi-arrow-up text-primary"></i> {/if}
+                                {#if currentSort === '-purchase_date'} <i class="mdi mdi-arrow-down text-primary"></i> {/if}
                             </th>
                             <th class="text-end px-2 px-lg-4">操作</th>
                         </tr>
@@ -354,7 +355,7 @@
                                     </td>
                                     <td class="d-none d-lg-table-cell">{asset.location || '-'}</td>
                                     <td class="d-none d-lg-table-cell">{asset.expand?.assigned_to?.name || asset.expand?.assigned_to?.email || '未指派'}</td>
-                                    <td class="text-muted small d-none d-lg-table-cell">{new Date(asset.created).toLocaleDateString()}</td>
+                                    <td class="text-muted small d-none d-lg-table-cell">{asset.purchase_date ? new Date(asset.purchase_date).toLocaleDateString() : '-'}</td>
                                     <td class="text-end px-2 px-lg-4" onclick={(e) => e.stopPropagation()}>
                                         <div style="white-space: nowrap;">
                                             {#if asset.status === 'active' && asset.is_lendable}
