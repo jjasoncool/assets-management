@@ -14,6 +14,7 @@
     "@sveltejs/kit": "^2.53.4",
     "@sveltejs/vite-plugin-svelte": "^4.0.4",
     "@types/bootstrap": "^5.2.10",
+    "@types/node": "^25.6.0",
     "flatpickr": "^4.6.13",
     "npm-check-updates": "^19.6.3",
     "svelte": "^5.53.6",
@@ -39,6 +40,7 @@
     "pocketbase": "^0.26.8",
     "sweetalert2": "^11.26.21",
     "tom-select": "^2.5.2",
-    "viewerjs": "^1.11.7"
+    "viewerjs": "^1.11.7",
+    "xlsx": "^0.18.5"
   }
 }

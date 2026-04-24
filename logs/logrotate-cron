@@ -1,0 +1,9 @@
+#!/bin/sh
+# Logrotate cron script for Asset Management System
+# This script runs logrotate daily at 3:00 AM
+
+# Run logrotate with the configuration file
+/usr/sbin/logrotate /app/logs/logrotate.conf --state /app/logs/.logrotate.state
+
+# Exit with the status of logrotate
+exit $?

@@ -6,7 +6,12 @@
  * 重要：不要傳入第二個參數！PocketBase 0.36.x 的 onRecordUpdate 不接受 collection 參數
  * 必須在 hook 內部手動檢查 collection 名稱
  */
-onRecordAfterUpdate('borrow_records', (e) => {
+onRecordUpdate((e) => {
+    // 手動檢查 collection 名稱，因為此 Hook 沒有綁定特定 collection
+    if (e.collection.name !== 'borrow_records') {
+        return;
+    }
+
     // 【終極防禦】將整個 Hook 邏輯包在 try-catch 中
     try {
         const record = e.record;

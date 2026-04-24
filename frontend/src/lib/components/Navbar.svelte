@@ -53,7 +53,7 @@
                         <li>
                             <a
                                 class="dropdown-item"
-                                class:active={$page.url.pathname.startsWith('/assets')}
+                                class:active={$page.url.pathname.startsWith('/assets') && !$page.url.pathname.startsWith('/assets/bulk')}
                                 href="/assets"
                                 ><i class="mdi mdi-format-list-bulleted me-2"></i>資產清單</a
                             >
@@ -65,6 +65,15 @@
                                     class:active={$page.url.pathname.startsWith('/asset-categories')}
                                     href="/asset-categories"
                                     ><i class="mdi mdi-shape me-2"></i>資產類別管理</a
+                                >
+                            </li>
+                            <li><hr class="dropdown-divider" /></li>
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    class:active={$page.url.pathname.startsWith('/assets/bulk')}
+                                    href="/assets/bulk"
+                                    ><i class="mdi mdi-file-excel-outline me-2"></i>大量匯入/匯出</a
                                 >
                             </li>
                         {/if}

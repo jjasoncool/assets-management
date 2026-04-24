@@ -1,0 +1,9 @@
+# 忽略所有日誌文件
+*.log
+*.log.*
+*.gz
+
+# 但保留目錄結構
+!.gitignore
+!logrotate.conf
+!README.md

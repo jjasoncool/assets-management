@@ -553,7 +553,7 @@
 						bind:value={formData.assigned_to}
 						disabled={isReadonly}
 					>
-						<option value="">請選擇保管人</option>
+						<option value="">未指派</option>
 						{#each users as user}
 							<option value={user.id}>{user.name || user.email}</option>
 						{/each}

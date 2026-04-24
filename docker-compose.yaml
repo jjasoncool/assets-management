@@ -35,8 +35,11 @@ services:
       - PB_ADMIN_EMAIL=${PB_ADMIN_EMAIL}
       - PB_ADMIN_PASSWORD=${PB_ADMIN_PASSWORD}
       - BODY_SIZE_LIMIT=26214400
+      - LOG_DIR=/app/logs/app
+      - STARTUP_LOG_DIR=/app/logs/startup
     volumes:
       - ./frontend:/app
+      - ./logs:/app/logs
     networks:
       - app-network
 

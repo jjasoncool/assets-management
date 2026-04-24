@@ -6,7 +6,21 @@ export enum Collections {
     MaintenanceRecords = 'maintenance_records',
     Users = 'users',
     AssetCategories = 'asset_categories',
-    BorrowRecords = 'borrow_records'
+    BorrowRecords = 'borrow_records',
+    LoginLogs = 'login_logs'
+}
+
+// [新增] 登入日誌介面
+export interface LoginLog {
+    id: string;
+    user?: string; // Relation to users (optional, if failed login doesn't match a user)
+    email_attempted?: string; // The email used to try to login
+    ip_address: string;
+    user_agent: string;
+    success: boolean;
+    reason?: string; // Failure reason
+    created: string;
+    updated: string;
 }
 
 // [新增] 使用者介面 (配合 schema)
@@ -64,7 +78,7 @@ export interface Asset {
     integrity_score?: number;
     availability_score?: number;
     total_risk_score?: number;
-    status: 'active' | 'inactive' | 'maintenance' | 'retired' | 'lost' | 'stolen' | 'borrowed';
+    status: 'in_stock' | 'borrowed' | 'maintenance' | 'retired' | 'lost';
     is_lendable: boolean; // 是否可借用
     requires_approval?: boolean;
     notes?: string;
