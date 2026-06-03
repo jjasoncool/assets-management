@@ -1,6 +1,6 @@
 import { fail } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
-import { getAssets, deleteAsset, getAllAssetCategories } from '$lib/server/services/assetService';
+import { getAssets, deleteAsset, getAllAssetCategories, updateAsset } from '$lib/server/services/assetService';
 import { getUsersList, isAdmin } from '$lib/server/services/userService';
 import { borrowAsset } from '$lib/server/services/borrowService';
 import type PocketBase from 'pocketbase';
@@ -58,6 +58,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 export const actions: Actions = {
     delete: async ({ request, locals }) => {
+        if (!locals.user || !isAdmin(locals.user)) {
+            return fail(403, { error: '權限不足，只有管理員可以刪除資產' });
+        }
+
         const formData = await request.formData();
         const id = formData.get('id') as string;
 
@@ -96,6 +100,55 @@ export const actions: Actions = {
         } catch (err: any) {
             logger.error('Borrow error:', err);
             return fail(500, { error: err.message || '借用申請失敗' });
+        }
+    },
+
+    bulkAction: async ({ request, locals }) => {
+        const pb = locals.pb as unknown as PocketBase;
+        const user = locals.user;
+
+        if (!user || !isAdmin(user)) {
+            return fail(403, { error: '權限不足，只有管理員可以執行批次操作' });
+        }
+
+        const formData = await request.formData();
+        const operation = String(formData.get('operation') || '');
+        const assetIds = String(formData.get('assetIds') || '')
+            .split(',')
+            .map(id => id.trim())
+            .filter(Boolean);
+
+        if (assetIds.length === 0) {
+            return fail(400, { error: '請先選擇資產' });
+        }
+
+        try {
+            if (operation === 'lendable_true' || operation === 'lendable_false') {
+                const isLendable = operation === 'lendable_true';
+
+                await Promise.all(
+                    assetIds.map(id => updateAsset(pb, id, { is_lendable: isLendable }))
+                );
+
+                return {
+                    success: true,
+                    message: `已將 ${assetIds.length} 筆資產設定為${isLendable ? '允許借用' : '不允許借用'}`
+                };
+            }
+
+            if (operation === 'delete') {
+                await Promise.all(assetIds.map(id => deleteAsset(pb, id)));
+
+                return {
+                    success: true,
+                    message: `已刪除 ${assetIds.length} 筆資產`
+                };
+            }
+
+            return fail(400, { error: '未知的批次操作' });
+        } catch (err: any) {
+            logger.error('Bulk asset action error:', err);
+            return fail(500, { error: err.message || '批次操作失敗' });
         }
     }
 };

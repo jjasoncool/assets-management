@@ -37,6 +37,7 @@
 
     // 選擇狀態
     let selectedAssets = $state<string[]>([]);
+    let bulkOperation = $state('');
 
     // Modal 相關
     let borrowModalElement: HTMLElement;
@@ -130,6 +131,7 @@
 
     // --- 刪除邏輯 (Server Action) ---
     let deleteForm: HTMLFormElement;
+    let bulkActionForm = $state<HTMLFormElement | null>(null);
     let deleteId = $state('');
 
     async function confirmDelete(id: string) {
@@ -179,6 +181,15 @@
             const newIds = assets.map((a: any) => a.id).filter((id: string) => !selectedAssets.includes(id));
             selectedAssets = [...selectedAssets, ...newIds];
         }
+    }
+
+    function getBulkOperationLabel(operation: string) {
+        const labels: Record<string, string> = {
+            lendable_true: '允許借用',
+            lendable_false: '不允許借用',
+            delete: '刪除所選'
+        };
+        return labels[operation] || '批次操作';
     }
 
     // --- Helper functions ---
@@ -385,9 +396,71 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                          {#if currentUser?.role?.includes('admin')}
-                            <button class="btn btn-outline-danger btn-sm me-2 d-none d-lg-inline-block" disabled={selectedAssets.length === 0}>
-                                刪除所選 ({selectedAssets.length})
-                            </button>
+                            <form
+                                method="POST"
+                                action="?/bulkAction"
+                                bind:this={bulkActionForm}
+                                class="d-none d-lg-inline-flex align-items-center gap-2 me-2"
+                                use:enhance={() => {
+                                    return async ({ result, update }) => {
+                                        await update();
+
+                                        if (result.type === 'success') {
+                                            const data = result.data as any;
+                                            SwalInstance?.fire('完成', data?.message || '批次操作完成', 'success');
+                                            selectedAssets = [];
+                                            bulkOperation = '';
+                                        } else if (result.type === 'failure') {
+                                            const data = result.data as any;
+                                            SwalInstance?.fire('錯誤', data?.error || '批次操作失敗', 'error');
+                                        } else if (result.type === 'error') {
+                                            SwalInstance?.fire('錯誤', result.error?.message || '批次操作失敗', 'error');
+                                        }
+                                    };
+                                }}
+                            >
+                                <input type="hidden" name="assetIds" value={selectedAssets.join(',')} />
+                                <span class="small text-muted">已選取 {selectedAssets.length} 筆</span>
+                                <select
+                                    class="form-select form-select-sm"
+                                    name="operation"
+                                    bind:value={bulkOperation}
+                                    disabled={selectedAssets.length === 0}
+                                    style="width: 150px;"
+                                >
+                                    <option value="">批次操作</option>
+                                    <option value="lendable_true">允許借用</option>
+                                    <option value="lendable_false">不允許借用</option>
+                                    <option value="delete">刪除所選</option>
+                                </select>
+                                <button
+                                    class="btn btn-outline-primary btn-sm"
+                                    type="button"
+                                    disabled={selectedAssets.length === 0 || !bulkOperation}
+                                    onclick={async () => {
+                                        const actionLabel = getBulkOperationLabel(bulkOperation);
+                                        const isDelete = bulkOperation === 'delete';
+                                        const result = await SwalInstance?.fire({
+                                            title: `確定要${actionLabel}？`,
+                                            text: isDelete
+                                                ? `將刪除 ${selectedAssets.length} 筆資產，此操作無法復原！`
+                                                : `將 ${selectedAssets.length} 筆資產設定為「${actionLabel}」。此設定會影響資產是否可被申請借用，但不會改變目前借出狀態。`,
+                                            icon: isDelete ? 'warning' : 'question',
+                                            showCancelButton: true,
+                                            confirmButtonColor: isDelete ? '#dc3545' : '#0d6efd',
+                                            cancelButtonColor: '#6c757d',
+                                            confirmButtonText: '確認執行',
+                                            cancelButtonText: '取消'
+                                        });
+
+                                        if (result?.isConfirmed) {
+                                            bulkActionForm?.requestSubmit();
+                                        }
+                                    }}
+                                >
+                                    套用
+                                </button>
+                            </form>
                         {/if}
                         <span class="small text-muted ms-2">
                             總共 {totalItems} 筆

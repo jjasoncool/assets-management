@@ -52,12 +52,13 @@
                     assetsByCategory.get(categoryName)?.push({
                         '財產編號': asset.asset_id || '',
                         '資產名稱': asset.name || '',
-                        '狀態': asset.status || '',
+                        '目前狀態': asset.status || '',
                         '品牌': asset.brand || '',
                         '型號': asset.model || '',
                         '序號': asset.serial_number || '',
                         '購買日期': asset.purchase_date ? asset.purchase_date.split('T')[0] : '',
                         '原廠維護年限': asset.warranty_years || '',
+                        '存放位置': asset.location || '',
                         '部門': asset.department || '',
                         '保管人': assignedToName,
                         '備註': asset.notes || '',
@@ -90,8 +91,8 @@
                     } else {
                         // 即使該類別沒有資產，也產生一個空表與表頭，方便使用者當作「匯入範本」
                         const emptyHeader = [{
-                            '財產編號': '', '資產名稱': '', '狀態': '', '品牌': '', '型號': '', '序號': '',
-                            '購買日期': '', '原廠維護年限': '', '部門': '', '保管人': '', '備註': '',
+                            '財產編號': '', '資產名稱': '', '目前狀態': '', '品牌': '', '型號': '', '序號': '',
+                            '購買日期': '', '原廠維護年限': '', '存放位置': '', '部門': '', '保管人': '', '備註': '',
                             '機密性': '', '完整性': '', '可用性': ''
                         }];
                         const ws = XLSX.utils.json_to_sheet(emptyHeader);
@@ -193,6 +194,7 @@
                                 <li>建議先至「匯出資產」下載範本。系統會根據 <strong>工作表 (Sheet) 名稱</strong> 對應「資產類別」。</li>
                                 <li><strong>新增資產：</strong> 保持「財產編號」欄位為空白，系統會自動分配新編號。</li>
                                 <li><strong>更新資產：</strong> 填寫既有的「財產編號」(如 PC0001)，系統會更新該筆資產的其他欄位。</li>
+                                <li><strong>目前狀態：</strong> 僅供匯出參考，匯入時不會新增或更新資產狀態。</li>
                                 <li>日期格式建議設定為 <code>YYYY-MM-DD</code>。</li>
                             </ul>
                         </div>
@@ -239,7 +241,8 @@
                                     <div>
                                         <strong>處理完成！</strong>
                                         新增 <span class="badge bg-success">{form.createdCount || 0}</span> 筆，
-                                        更新 <span class="badge bg-info">{form.updatedCount || 0}</span> 筆。
+                                        更新 <span class="badge bg-info">{form.updatedCount || 0}</span> 筆，
+                                        未變更 <span class="badge bg-secondary">{form.unchangedCount || 0}</span> 筆。
                                         {#if form.failedCount > 0}
                                             失敗 <span class="badge bg-danger">{form.failedCount}</span> 筆。
                                         {/if}

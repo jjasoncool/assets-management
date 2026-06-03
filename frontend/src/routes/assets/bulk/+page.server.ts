@@ -2,8 +2,54 @@ import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { logger } from '$lib/utils/logger';
 import { isAdmin, getUsersList } from '$lib/server/services/userService';
+import { calculateNextAssetIdAndSequence } from '$lib/server/services/assetService';
+import { normalizeDateForComparison } from '$lib/utils/datetime';
 import type { Asset, AssetCategory, User } from '$lib/types';
 import * as XLSX from 'xlsx';
+
+const normalizeComparableValue = (value: unknown) => {
+    if (value === undefined || value === null) return '';
+    return String(value).trim();
+};
+
+const compareTextFields = [
+    'category',
+    'name',
+    'brand',
+    'model',
+    'serial_number',
+    'location',
+    'department',
+    'assigned_to',
+    'notes'
+] as const;
+
+const compareNumberFields = [
+    'warranty_years',
+    'confidentiality_score',
+    'integrity_score',
+    'availability_score',
+    'total_risk_score'
+] as const;
+
+const isBlankExcelRow = (row: Record<string, unknown>) => {
+    return Object.values(row).every(value => normalizeComparableValue(value) === '');
+};
+
+const isAssetDataUnchanged = (existingAsset: Record<string, any>, assetData: Record<string, any>) => {
+    const textFieldsUnchanged = compareTextFields.every(field =>
+        normalizeComparableValue(existingAsset[field]) === normalizeComparableValue(assetData[field])
+    );
+
+    const numberFieldsUnchanged = compareNumberFields.every(field =>
+        Number(existingAsset[field] || 0) === Number(assetData[field] || 0)
+    );
+
+    const purchaseDateUnchanged =
+        normalizeDateForComparison(existingAsset.purchase_date) === normalizeDateForComparison(assetData.purchase_date);
+
+    return textFieldsUnchanged && numberFieldsUnchanged && purchaseDateUnchanged;
+};
 
 /**
  * @description 為大量匯入/匯出頁面載入必要資料
@@ -68,6 +114,8 @@ export const actions: Actions = {
         const results: { success: boolean; message: string; data?: any }[] = [];
         let createdCount = 0;
         let updatedCount = 0;
+        let skippedCount = 0;
+        let unchangedCount = 0;
         let failedCount = 0;
 
         try {
@@ -86,7 +134,7 @@ export const actions: Actions = {
                 const safeName = c.name.replace(/[:\\/\?\*\[\]]/g, '_');
                 categoryMap.set(safeName, c);
             }
-            
+
             // 建立 name -> user 對應，避免在迴圈中重複查詢資料庫
             const userMap = new Map<string, any>();
             for (const u of allUsers) {
@@ -94,7 +142,7 @@ export const actions: Actions = {
                 // 也可以支援用 email 搜尋
                 if (u.email) userMap.set(u.email, u);
             }
-            
+
             // 追蹤記憶體中的 sequence 遞增
             const categorySequences = new Map<string, number>(allCategories.map(c => [c.id, c.next_sequence]));
             // 記錄哪些 category 有被更新 sequence，最後再一次性回寫
@@ -115,6 +163,11 @@ export const actions: Actions = {
                         const row = rows[i];
                         const rowIndex = i + 2;
 
+                        if (isBlankExcelRow(row)) {
+                            // 空白範本列或空白資料列不屬於有效資料，靜默略過，不列入畫面統計。
+                            continue;
+                        }
+
                         // 嘗試解析日期，並處理無效日期的錯誤
                         let parsedDate: string | undefined = undefined;
                         if (row['購買日期'] || row['Purchase Date']) {
@@ -134,13 +187,13 @@ export const actions: Actions = {
                             serial_number: String(row['序號'] || row['Serial Number'] || '').trim(),
                             purchase_date: parsedDate,
                             warranty_years: Number(row['原廠維護年限'] || row['Warranty Years']) || 0,
+                            location: String(row['存放位置'] || row['Location'] || '').trim(),
                             department: String(row['部門'] || row['Department'] || '').trim(),
                             assigned_to_username: String(row['保管人'] || row['Assigned To'] || '').trim(),
                             notes: String(row['備註'] || row['Notes'] || '').trim(),
                             confidentiality_score: Number(row['機密性'] || row['Confidentiality']) || 0,
                             integrity_score: Number(row['完整性'] || row['Integrity']) || 0,
-                            availability_score: Number(row['可用性'] || row['Availability']) || 0,
-                            status: String(row['狀態'] || row['Status'] || 'in_stock').trim() as Asset['status']
+                            availability_score: Number(row['可用性'] || row['Availability']) || 0
                         };
 
                         try {
@@ -154,7 +207,7 @@ export const actions: Actions = {
                             if (rowData.assigned_to_username) {
                                 const matchedUser = userMap.get(rowData.assigned_to_username);
                                 if (!matchedUser) {
-                                     throw new Error(`找不到保管人: ${rowData.assigned_to_username}`);
+                                    throw new Error(`找不到保管人: ${rowData.assigned_to_username}`);
                                 }
                                 assigned_to_user_id = matchedUser.id;
                             }
@@ -170,21 +223,27 @@ export const actions: Actions = {
                                 serial_number: rowData.serial_number,
                                 purchase_date: rowData.purchase_date,
                                 warranty_years: rowData.warranty_years,
+                                location: rowData.location,
                                 department: rowData.department,
                                 assigned_to: assigned_to_user_id,
                                 notes: rowData.notes,
                                 confidentiality_score: rowData.confidentiality_score,
                                 integrity_score: rowData.integrity_score,
                                 availability_score: rowData.availability_score,
-                                total_risk_score: total_risk_score,
-                                status: ['in_stock', 'borrowed', 'maintenance', 'retired', 'lost'].includes(rowData.status) ? rowData.status : 'in_stock',
-                                is_lendable: true
+                                total_risk_score: total_risk_score
                             };
 
                             if (rowData.asset_id) {
                                 // Update 邏輯：有提供 asset_id
                                 try {
                                     const existingAsset = await pb.collection('assets').getFirstListItem(`asset_id="${rowData.asset_id}"`);
+                                    if (isAssetDataUnchanged(existingAsset, baseAssetData)) {
+                                        results.push({ success: true, message: `資產 ${rowData.asset_id} 無變更，已略過更新。` });
+                                        skippedCount++;
+                                        unchangedCount++;
+                                        continue;
+                                    }
+
                                     await pb.collection('assets').update(existingAsset.id, baseAssetData);
                                     results.push({ success: true, message: `成功更新資產 ${rowData.asset_id}` });
                                     updatedCount++;
@@ -196,20 +255,26 @@ export const actions: Actions = {
                                 }
                             } else {
                                 // Create 邏輯：未提供 asset_id
-                                const currentSeq = categorySequences.get(category.id) || 1;
-                                const new_asset_id = `${category.prefix}${currentSeq.toString().padStart(4, '0')}`;
-                                
+                                // 與單筆新增共用相同規則：掃描既有資產編號，產生 PREFIX-001 格式並補最小缺號。
+                                const { assetId: new_asset_id, newSequence } = await calculateNextAssetIdAndSequence(
+                                    pb,
+                                    category.id,
+                                    allCategories
+                                );
+
                                 const newAssetData = {
                                     ...baseAssetData,
-                                    asset_id: new_asset_id
+                                    asset_id: new_asset_id,
+                                    status: 'active' as Asset['status'],
+                                    is_lendable: true
                                 };
 
                                 await pb.collection('assets').create<Asset>(newAssetData);
-                                
+
                                 // 更新記憶體中的 sequence
-                                categorySequences.set(category.id, currentSeq + 1);
+                                categorySequences.set(category.id, newSequence);
                                 updatedCategories.add(category.id);
-                                
+
                                 results.push({ success: true, message: `成功建立資產 ${new_asset_id}` });
                                 createdCount++;
                             }
@@ -229,7 +294,7 @@ export const actions: Actions = {
                     results.push({ success: false, message: `工作表 "${sheetName}" 無法對應到任何資產類別的名稱，已略過。` });
                 }
             }
-            
+
             // 批次更新所有被影響的 Category next_sequence
             for (const categoryId of updatedCategories) {
                 const newSeq = categorySequences.get(categoryId);
@@ -240,8 +305,8 @@ export const actions: Actions = {
                 }
             }
 
-            logger.info(`[Upload] Bulk asset import completed. Created: ${createdCount}, Updated: ${updatedCount}, Failed: ${failedCount}.`);
-            return { success: true, createdCount, updatedCount, failedCount, results };
+            logger.info(`[Upload] Bulk asset import completed. Created: ${createdCount}, Updated: ${updatedCount}, Unchanged: ${unchangedCount}, Skipped: ${skippedCount}, Failed: ${failedCount}.`);
+            return { success: true, createdCount, updatedCount, skippedCount, unchangedCount, failedCount, results };
 
         } catch (err: unknown) {
             const errorMessage = err instanceof Error ? err.message : String(err);

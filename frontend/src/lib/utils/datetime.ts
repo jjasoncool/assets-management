@@ -43,6 +43,33 @@ function formatDate(date: string | Date | null | undefined, formatString = 'yyyy
 }
 
 /**
+ * 將日期值正規化為 yyyy-MM-dd，供資料比對使用。
+ * 支援 Date、ISO 字串、PocketBase 的 "YYYY-MM-DD HH:mm:ss.SSSZ" 字串。
+ * @param {unknown} date - 日期值
+ * @returns {string} - yyyy-MM-dd；空值回傳空字串；無法解析時回傳 trim 後原字串
+ */
+function normalizeDateForComparison(date: unknown): string {
+	if (!date) return '';
+
+	if (date instanceof Date && !Number.isNaN(date.getTime())) {
+		return date.toISOString().split('T')[0];
+	}
+
+	const rawValue = String(date).trim();
+	if (!rawValue) return '';
+
+	const directDateMatch = rawValue.match(/^(\d{4}-\d{2}-\d{2})/);
+	if (directDateMatch) return directDateMatch[1];
+
+	const parsedDate = parseISO(rawValue.replace(' ', 'T'));
+	if (!Number.isNaN(parsedDate.getTime())) {
+		return parsedDate.toISOString().split('T')[0];
+	}
+
+	return rawValue;
+}
+
+/**
  * 獲取當前應用程式設定時區的日期字串 (yyyy-MM-dd)
  * 特別用於 <input type="date"> 的預設值，以避免時區問題
  * @returns {string} - 'yyyy-MM-dd' 格式的日期字串
@@ -72,4 +99,4 @@ function getCalendarEndDate(date: string | Date | null | undefined): string | un
 	}
 }
 
-export { TIMEZONE, formatDateTime, formatDate, getCurrentZonedDateString, getCalendarEndDate };
+export { TIMEZONE, formatDateTime, formatDate, normalizeDateForComparison, getCurrentZonedDateString, getCalendarEndDate };

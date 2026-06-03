@@ -78,7 +78,7 @@ export interface Asset {
     integrity_score?: number;
     availability_score?: number;
     total_risk_score?: number;
-    status: 'in_stock' | 'borrowed' | 'maintenance' | 'retired' | 'lost';
+    status: 'active' | 'inactive' | 'maintenance' | 'retired' | 'lost' | 'stolen' | 'borrowed';
     is_lendable: boolean; // 是否可借用
     requires_approval?: boolean;
     notes?: string;
