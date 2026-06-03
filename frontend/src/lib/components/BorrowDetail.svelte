@@ -7,14 +7,14 @@
 
     // 內部狀態控制
     let modalElement: HTMLDivElement;
-    let modal: Modal | null = $state(null);
-    let bsInstance: any = null;
+    let modal: Modal | null = null;
+    let bsInstance: any = $state(null);
 
     let selectedRecord: any = $state(null);
     let currentToken = $state('');
     let activeSlide = $state(0);
     let activeImageTab = $state<'borrow' | 'return'>('borrow');
-    
+
     // [Viewer.js] 使用 $derived 自動計算圖片
     let currentImages = $derived(
         selectedRecord
@@ -24,10 +24,15 @@
 
     bs.subscribe((value) => (bsInstance = value));
 
-    $effect(() => {
-        if (modalElement && bsInstance) {
+    function ensureModal() {
+        if (!modal && modalElement && bsInstance) {
             modal = new bsInstance.Modal(modalElement, { keyboard: true, backdrop: true });
         }
+        return modal;
+    }
+
+    $effect(() => {
+        ensureModal();
         return () => modal?.dispose();
     });
 
@@ -39,7 +44,7 @@
         currentToken = token;
         activeSlide = 0; // 重置輪播圖到第一張
         activeImageTab = 'borrow'; // 重置 Tab 到借出照片
-        modal?.show();
+        ensureModal()?.show();
     }
 
     /**
@@ -52,7 +57,7 @@
             activeSlide = (activeSlide - 1 + total) % total;
         }
     }
-    
+
     function getStatusClass(status: string) {
         switch (status) {
             case 'borrowed': return 'bg-primary';
@@ -218,7 +223,7 @@
         max-height: 80vh;
         overflow-y: auto;
     }
-    
+
     .clickable-img {
         cursor: zoom-in;
     }

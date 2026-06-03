@@ -32,9 +32,19 @@
     // (C) 過濾後的清單：側邊欄真正要顯示的資料 ($derived 自動計算)
     let filteredSideList = $derived(
         rawRecords.filter(record => {
+            if (record.status === 'returned') return false;
             const recordStart = new Date(record.borrow_date);
             const recordEnd = new Date(record.actual_return_date || record.expected_return_date);
             return recordStart < currentViewRange.end && recordEnd > currentViewRange.start;
+        }).sort((a, b) => {
+            const endA = new Date(a.actual_return_date || a.expected_return_date).getTime();
+            const endB = new Date(b.actual_return_date || b.expected_return_date).getTime();
+            if (endA !== endB) {
+                return endA - endB;
+            }
+            const startA = new Date(a.borrow_date).getTime();
+            const startB = new Date(b.borrow_date).getTime();
+            return startA - startB;
         })
     );
 
@@ -88,7 +98,9 @@
                     // 更新側邊欄用的 state (只用借還紀錄)
                     rawRecords = borrowRecords;
 
-                    const borrowEvents = borrowRecords.map((record: any) => {
+                    const borrowEvents = borrowRecords
+                        .filter((record: any) => record.status !== 'returned')
+                        .map((record: any) => {
                         const statusInfo = getBorrowStatusInfo(record.status);
                         let title = record.expand?.asset?.name || '未知';
                         if (record.status === 'overdue') {

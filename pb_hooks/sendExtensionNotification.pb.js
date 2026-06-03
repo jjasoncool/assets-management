@@ -7,29 +7,50 @@
  * 必須在 hook 內部手動檢查 collection 名稱
  */
 onRecordUpdate((e) => {
-    // 手動檢查 collection 名稱，因為此 Hook 沒有綁定特定 collection
-    if (e.collection.name !== 'borrow_records') {
-        return;
+    const record = e.record;
+
+    // 手動檢查 collection 名稱，因為此 Hook 沒有綁定特定 collection。
+    // PocketBase 0.36.x+ 的 JS hook event 在某些情境（例如 cron/transaction 內 save）
+    // 可能不會提供 e.collection；若直接讀 e.collection.name，會造成：
+    // TypeError: Cannot read property 'name' of undefined
+    let collectionName = '';
+
+    try {
+        if (e.collection && e.collection.name) {
+            collectionName = e.collection.name;
+        } else if (record && typeof record.collection === 'function') {
+            const collection = record.collection();
+            collectionName = collection && collection.name ? collection.name : '';
+        }
+    } catch (err) {
+        // collection 判斷只是通知 hook 的前置判斷；無法判斷時不應阻擋資料更新。
+        console.error('Unable to resolve collection name in sendExtensionNotification hook:', err);
+        return e.next();
     }
 
-    // 【終極防禦】將整個 Hook 邏輯包在 try-catch 中
+    // 非 borrow_records 的更新，直接放行。
+    if (collectionName !== 'borrow_records') {
+        return e.next();
+    }
+
+    // 安全地取得舊資料 (如果 PocketBase 版本不支援，就退回 null)
+    const oldRecord = record.originalCopy ? record.originalCopy() : null;
+
+    const currentRemark = record.get('remark') || '';
+    const oldRemark = oldRecord ? (oldRecord.get('remark') || '') : '';
+
+    // 只在「本次更新確實新增了延期資訊」時寄通知；其他更新必須放行。
+    if (!currentRemark.includes('[延期]') || currentRemark === oldRemark) {
+        return e.next();
+    }
+
+    console.log(`Detected extension for borrow record ${record.id}. Sending notification emails after update...`);
+
+    // 重要：PocketBase 的 onRecordUpdate 是 middleware hook。
+    // 先呼叫 e.next() 讓資料更新真正落盤；後面的通知流程失敗只記 log，不影響資料更新。
+    e.next();
+
     try {
-        const record = e.record;
-
-        // 安全地取得舊資料 (如果 PocketBase 版本不支援，就退回 null)
-        const oldRecord = record.originalCopy ? record.originalCopy() : null;
-
-        const currentRemark = record.get('remark') || '';
-        const oldRemark = oldRecord ? (oldRecord.get('remark') || '') : '';
-
-        // 檢查是否為延期操作：
-        // 必須包含 [延期]，且前後的 remark 不一樣 (代表這次更新確實新增了延期日誌)
-        if (!currentRemark.includes('[延期]') || currentRemark === oldRemark) {
-            return;
-        }
-
-        console.log(`Detected extension for borrow record ${record.id}. Sending notification emails...`);
-
         // 1. 獲取相關資料
         const userId = record.get('user');
         const assetId = record.get('asset');
@@ -149,7 +170,7 @@ onRecordUpdate((e) => {
         console.log(`Successfully sent extension notification for record ${record.id}`);
 
     } catch (err) {
-        // 【最重要的一步】就算 Hook 發生任何致命錯誤，也會被攔截在這裡印出，絕對不影響資料庫寫入！
-        console.error("Hook Error in sendExtensionNotification: ", err);
+        // 這裡只處理「資料已更新後」的通知錯誤，因此不可再呼叫 e.next()，避免重複放行。
+        console.error('Failed to send extension notification after record update:', err);
     }
 });
