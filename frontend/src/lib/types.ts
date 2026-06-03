@@ -7,7 +7,23 @@ export enum Collections {
     Users = 'users',
     AssetCategories = 'asset_categories',
     BorrowRecords = 'borrow_records',
-    LoginLogs = 'login_logs'
+    LoginLogs = 'login_logs',
+    Announcements = 'announcements'
+}
+
+export interface Announcement {
+    id: string;
+    title: string;
+    content: string;
+    is_active: boolean;
+    published_at?: string;
+    created_by?: string | string[];
+    created: string;
+    updated: string;
+    expand?: {
+        created_by?: User | User[];
+        [key: string]: any;
+    };
 }
 
 // [新增] 登入日誌介面

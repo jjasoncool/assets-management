@@ -67,22 +67,18 @@
 - [x] 開發維護統計儀表板 (`maintenance/stats`) 包含 Chart.js 整合。
 - [x] 修正時區 UTC 問題與借用/延期日期的複雜校驗邏輯。
 - [x] 借用紀錄編輯與刪除 (24小時限制、admin 權限控管)。
+- [ ] 登入顯示 release notes
+- [x] 實作 `login_logs` 紀錄與本地 `fileLogger` 整合 (包含成功與失敗登入紀錄)
 
 ### 🧩 暫存上下文 (Temporary Context)
-- **當前重點檔案**：`frontend/src/routes/assets/bulk/+page.svelte`, `frontend/src/routes/assets/bulk/+page.server.ts`
+- **當前重點檔案**：`frontend/src/routes/login/+page.server.ts`, `frontend/src/lib/types.ts`
 - **注意事項**：
-  - 已實作 Upsert 邏輯。匯出的 Excel 現在可直接作為匯入範本。如果使用者留下財產編號空白，系統將自動產生新編號（新增）；若填寫財產編號則會嘗試更新現有資料。
-  - **Excel TAB 與資產代碼對應關係**：
-    - **匯出**：每個資產類別會獨立為一個工作表 (Sheet)，Sheet 名稱 = 資產類別名稱（如 "桌上型電腦"、"筆記型電腦"）。
-    - **匯入**：根據 Sheet 名稱比對資料庫中的 `asset_categories.name` 來對應資產類別。
-    - **資產代碼生成**：新增資產時，使用該類別的 `prefix` + `next_sequence`（如 `PC0001`）。
-    - **特殊字符處理**：Excel 不允許工作表名稱包含 `: \ / ? * [ ]`，系統會自動替換為底線 `_`，匯入時會同時比對原始名稱和 safe 名稱。
-    - 參考位置：[+page.server.ts:80-112](frontend/src/routes/assets/bulk/+page.server.ts#L80-L112), [+page.svelte:74-101](frontend/src/routes/assets/bulk/+page.svelte#L74-L101)
+  - 新增了 `login_logs` 的 PocketBase 資料表架構建議，並更新對應的 TypeScript Interface。
+  - 將本地文件日誌 `fileLogger.ts` 整合進登入流程，成功或失敗的登入皆會記錄在 `/app/logs/app.log` 中。
+  - 登入失敗時也會記錄至 PocketBase `login_logs` 中（不包含 `user` 關聯，但記錄 `email_attempted` 及 `reason`）。
 
 ### 📝 上次交接紀錄 (Last Handoff Note)
-- 完成了大量匯入/匯出頁面的邏輯重構與修復：
-    1.  實作 **Upsert (新增與更新)** 機制：依據 `asset_id` 決定行為。
-    2.  修復 **`next_sequence` 未遞增 Bug**：匯入時同類別的新資產會正確取得不同的連續編號。
-    3.  **補齊必填欄位**：新增了 `name` (資產名稱) 與 `status` 等欄位的讀寫對應，並加入基礎防呆 (如預設名稱)。
-    4.  優化 **Excel 匯出**：即使該類別目前無資產，也會匯出空表與表頭作為「範本」使用。
-    5.  統一錯誤處理為 `fail(status, data)` 以確保前端元件能正確接收 Form Error。
+- 完成了登入日誌 (`login_logs`) 的相關重構：
+    1.  設計了 PocketBase `login_logs` Schema，包含 `user`, `email_attempted`, `ip_address`, `user_agent`, `success`, `reason` 欄位。
+    2.  在 `src/lib/types.ts` 加入了 `LoginLog` 介面。
+    3.  重構 `login/+page.server.ts`，除了將原本只有成功登入寫入資料庫外，現在失敗登入也會被寫入資料庫，並且全面整合了 `fileLogger` 以雙軌記錄伺服器本地 log。

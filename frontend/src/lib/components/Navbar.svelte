@@ -209,12 +209,21 @@
                             </a>
                         </li>
                         {#if currentUser?.role?.includes('admin')}
+                            <li><hr class="dropdown-divider" /></li>
                             <li>
                                 <a
                                     class="dropdown-item"
                                     class:active={$page.url.pathname.startsWith('/users')}
                                     href="/users"
                                     ><i class="mdi mdi-account-group me-2"></i>使用者管理</a
+                                >
+                            </li>
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    class:active={$page.url.pathname.startsWith('/announcements')}
+                                    href="/announcements"
+                                    ><i class="mdi mdi-bullhorn-outline me-2"></i>公告事項管理</a
                                 >
                             </li>
                         {/if}

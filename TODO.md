@@ -22,7 +22,7 @@
     - [x] 圖片覆蓋問題
     - [x] 編輯的時候顯示 資產編號 readonly
     - [ ] 新增資產詳細編號欄位 (擴充使用)
-    - [ ] EXCEL 新增大量資產
+    - [x] EXCEL 新增大量資產
 
 ### 借還管理 (Borrow & Return Management)
 - **相關路徑:** `/borrow`, `/return`
