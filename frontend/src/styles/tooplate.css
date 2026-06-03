@@ -120,6 +120,92 @@ body {
   }
 }
 
+/* Home dashboard: make borrow list the primary area and calendar a compact reference */
+.home-dashboard .borrow-list-body {
+  max-height: clamp(700px, 76vh, 900px);
+}
+
+.home-dashboard .borrow-record-card {
+  cursor: pointer;
+}
+
+.home-dashboard .borrow-record-card-action {
+  z-index: 1;
+}
+
+.home-dashboard .borrow-record-card-content {
+  z-index: 2;
+  pointer-events: none;
+}
+
+.home-dashboard .borrow-record-card-content a {
+  pointer-events: auto;
+}
+
+.home-dashboard .calendar-card {
+  position: sticky;
+  top: 1rem;
+}
+
+.home-dashboard #calendar {
+  font-size: 0.82rem;
+  min-width: 360px;
+}
+
+.home-dashboard #calendar .fc-toolbar {
+  align-items: flex-start;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.65rem;
+}
+
+.home-dashboard #calendar .fc-toolbar-title {
+  font-size: 1rem;
+}
+
+.home-dashboard #calendar .fc-button {
+  padding: 0.25rem 0.42rem;
+}
+
+.home-dashboard #calendar .fc-daygrid-day-frame {
+  min-height: 4.15rem;
+}
+
+.home-dashboard #calendar .fc-event {
+  line-height: 1.25;
+  padding: 0.05rem 0.15rem;
+}
+
+.home-dashboard #calendar .fc-event-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1199.98px) {
+  .home-dashboard .borrow-list-body {
+    max-height: 520px;
+  }
+
+  .home-dashboard .calendar-card {
+    position: static;
+  }
+
+  .home-dashboard #calendar {
+    min-width: 620px;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .home-dashboard .borrow-list-body {
+    max-height: 480px;
+  }
+
+  .home-dashboard #calendar {
+    min-width: 620px;
+  }
+}
+
 @media (max-width: 424px) {
   .navbar-collapse {
     top: 107px;

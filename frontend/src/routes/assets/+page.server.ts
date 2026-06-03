@@ -5,6 +5,7 @@ import { getUsersList, isAdmin } from '$lib/server/services/userService';
 import { borrowAsset } from '$lib/server/services/borrowService';
 import type PocketBase from 'pocketbase';
 import { logger } from '$lib/utils/logger';
+import { Collections } from '$lib/types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
     const page = Number(url.searchParams.get('page')) || 1;
@@ -35,6 +36,22 @@ export const load: PageServerLoad = async ({ locals, url }) => {
             getAllAssetCategories(pb),
             isAdmin(user) ? getUsersList(pb) : Promise.resolve(user ? [user] : [])
         ]);
+
+        const pageAssetIds = assets.items.map((asset: any) => asset.id);
+        if (pageAssetIds.length > 0) {
+            const activeBorrowRecords = await pb.collection(Collections.BorrowRecords).getFullList({
+                filter: `(${pageAssetIds.map((id: string) => `asset = "${id}"`).join(' || ')}) && (status = "pending" || status = "borrowed" || status = "overdue")`,
+                fields: 'asset,status'
+            });
+            const activeBorrowStatusByAsset = new Map(
+                activeBorrowRecords.map((record: any) => [record.asset, record.status])
+            );
+
+            assets.items = assets.items.map((asset: any) => ({
+                ...asset,
+                active_borrow_status: activeBorrowStatusByAsset.get(asset.id) || null
+            }));
+        }
 
         return {
             assets: JSON.parse(JSON.stringify(assets)),

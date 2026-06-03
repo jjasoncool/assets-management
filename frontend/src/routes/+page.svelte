@@ -3,7 +3,8 @@
     import Navbar from '$lib/components/Navbar.svelte';
     import Footer from '$lib/components/Footer.svelte';
     import type { RecordModel } from 'pocketbase';
-    import { getBorrowStatusInfo, getMaintenanceTypeInfo } from '$lib/utils/helpers';
+    import BorrowDetail from '$lib/components/BorrowDetail.svelte';
+    import { getBorrowStatusInfo, getMaintenanceTypeInfo, getFileToken } from '$lib/utils/helpers';
     import { logger } from '$lib/utils/logger';
     // FullCalendar 相關
     import { Calendar } from '@fullcalendar/core';
@@ -58,6 +59,12 @@
 
     let currentUser = $derived(data?.currentUser);
     let calendar: Calendar;
+    let detailModal: ReturnType<typeof BorrowDetail>;
+
+    async function openRecordModal(record: RecordModel) {
+        const fileToken = await getFileToken();
+        detailModal?.showModal(record, fileToken);
+    }
 
     onMount(() => {
         const calendarEl = document.getElementById('calendar');
@@ -67,11 +74,13 @@
             plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
             initialView: 'dayGridMonth',
             headerToolbar: {
-                left: 'prev,next today',
+                left: 'prev,next',
                 center: 'title',
-                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                right: 'today'
             },
             height: 'auto',
+            fixedWeekCount: false,
+            dayMaxEvents: 2,
 
             datesSet: (dateInfo) => {
                 currentViewRange = {
@@ -155,11 +164,14 @@
     <div class="container-fluid px-sm-4">
         <Navbar />
 
-        <div class="row g-4">
-            <div class="col-12 col-xl-4">
-                <div class="card shadow-sm bg-white bg-opacity-90 h-100 mt-4">
-                    <div class="card-header bg-white bg-opacity-90 d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0 fw-bold">清單檢視 (借還)</h5>
+        <div class="row g-4 align-items-start home-dashboard">
+            <div class="col-12 col-xl-8">
+                <div class="card shadow bg-white bg-opacity-90 h-100 mt-4 border-0 rounded-4">
+                    <div class="card-header bg-white bg-opacity-90 d-flex justify-content-between align-items-center py-3 px-4">
+                        <div>
+                            <h4 class="card-title mb-1 fw-bold">借用清單</h4>
+                            <div class="small text-muted">依目前月曆範圍顯示尚未歸還的借用紀錄</div>
+                        </div>
                         <span class="badge bg-secondary">
                             {#if Math.abs(currentViewRange.end.getTime() - currentViewRange.start.getTime()) <= 86400000}
                                 當日
@@ -170,42 +182,80 @@
                             {/if}
                         </span>
                     </div>
-                    <div class="card-body overflow-auto" style="max-height: 600px;">
-                        {#each filteredSideList as record}
-                            {@const statusInfo = getBorrowStatusInfo(record.status)}
-                            <div class="d-flex justify-content-between align-items-start mb-3 pb-3 border-bottom">
-                                <div class="flex-grow-1">
-                                    <div class="fw-semibold">{record.expand?.asset?.name || '未知物品'}</div>
-                                    <div class="small text-muted">
-                                        借出: {formatDate(record.borrow_date)}
-                                        {#if record.actual_return_date}
-                                            <br>歸還: {formatDate(record.actual_return_date)}
-                                        {:else if record.expected_return_date}
-                                            <br>預計歸還: {formatDate(record.expected_return_date)}
-                                        {/if}
-                                    </div>
-                                    <span class="badge {statusInfo.className} rounded-pill mt-1">
-                                        {statusInfo.label}
-                                    </span>
+                    <div class="card-body overflow-auto p-3 borrow-list-body">
+                        <div class="row row-cols-1 row-cols-lg-2 g-2">
+                            {#each filteredSideList as record}
+                                {@const statusInfo = getBorrowStatusInfo(record.status)}
+                                {@const assetId = record.expand?.asset?.asset_id}
+                                <div class="col">
+                                    <article class="h-100 border rounded-3 bg-white bg-opacity-75 p-2 position-relative borrow-record-card">
+                                        <button
+                                            type="button"
+                                            class="position-absolute top-0 start-0 w-100 h-100 border-0 bg-transparent p-0 borrow-record-card-action"
+                                            title="查看借用詳情"
+                                            onclick={() => openRecordModal(record)}
+                                        >
+                                            <span class="visually-hidden">查看借用詳情</span>
+                                        </button>
+
+                                        <div class="position-relative borrow-record-card-content">
+                                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                                <div class="flex-grow-1 overflow-hidden">
+                                                    {#if assetId}
+                                                        <a
+                                                            href={`/assets?search=${assetId}`}
+                                                            class="font-monospace fw-bold text-decoration-none text-truncate d-block"
+                                                            title={`搜尋資產 ${assetId}`}
+                                                            onclick={(e) => e.stopPropagation()}
+                                                        >
+                                                            {assetId}
+                                                        </a>
+                                                    {:else}
+                                                        <div class="fw-bold text-truncate" title={record.expand?.asset?.name || '未知物品'}>
+                                                            {record.expand?.asset?.name || '未知物品'}
+                                                        </div>
+                                                    {/if}
+                                                    <div class="small text-muted text-truncate">
+                                                        {#if assetId}{record.expand?.asset?.name || '未知物品'} · {/if}
+                                                        {record.expand?.user?.name || '未知借用人'}
+                                                    </div>
+                                                </div>
+                                                <span class="badge {statusInfo.className} rounded-pill flex-shrink-0">
+                                                    {statusInfo.label}
+                                                </span>
+                                            </div>
+                                            <div class="small text-muted d-flex flex-wrap gap-2 mt-1">
+                                                <span>借出 {formatDate(record.borrow_date)}</span>
+                                                {#if record.actual_return_date}
+                                                    <span>歸還 {formatDate(record.actual_return_date)}</span>
+                                                {:else if record.expected_return_date}
+                                                    <span>預計歸還 {formatDate(record.expected_return_date)}</span>
+                                                {/if}
+                                            </div>
+                                        </div>
+                                    </article>
                                 </div>
-                            </div>
-                        {:else}
-                            <div class="text-center text-muted py-4">
-                                {#if rawRecords.length > 0}
-                                    此檢視範圍內無借用記錄
-                                {:else}
-                                    載入中或無資料...
-                                {/if}
-                            </div>
-                        {/each}
+                            {:else}
+                                <div class="col-12 text-center text-muted py-4">
+                                    {#if rawRecords.length > 0}
+                                        此檢視範圍內無借用記錄
+                                    {:else}
+                                        載入中或無資料...
+                                    {/if}
+                                </div>
+                            {/each}
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="col-12 col-xl-8">
-                <div class="card shadow-sm bg-white bg-opacity-90 h-100 mt-4">
-                    <div class="card-body">
-                        <div class="overflow-auto">
+            <div class="col-12 col-xl-4">
+                <div class="card shadow-sm bg-white bg-opacity-90 mt-4 border-0 rounded-4 calendar-card">
+                    <div class="card-header bg-white bg-opacity-90">
+                        <h6 class="card-title mb-0 fw-semibold text-muted">月曆參考</h6>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="overflow-auto pb-1">
                             <div id="calendar"></div>
                         </div>
                     </div>
@@ -214,3 +264,5 @@
         </div>
     </div>
 </div>
+
+<BorrowDetail bind:this={detailModal} />

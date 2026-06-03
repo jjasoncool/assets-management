@@ -369,9 +369,13 @@
                                     <td class="text-muted small d-none d-lg-table-cell">{asset.purchase_date ? new Date(asset.purchase_date).toLocaleDateString() : '-'}</td>
                                     <td class="text-end px-2 px-lg-4" onclick={(e) => e.stopPropagation()}>
                                         <div style="white-space: nowrap;">
-                                            {#if asset.status === 'active' && asset.is_lendable}
+                                            {#if asset.status === 'active' && asset.is_lendable && !asset.active_borrow_status}
                                                 <button onclick={(e) => openBorrowModal(e, asset)} class="btn btn-sm btn-outline-primary me-2" title="借用">
                                                     <i class="mdi mdi-hand-heart"></i><span class="d-none d-sm-inline"> 借用</span>
+                                                </button>
+                                            {:else if asset.active_borrow_status}
+                                                <button class="btn btn-sm btn-outline-secondary me-2" disabled title="已有有效借用紀錄">
+                                                    <i class="mdi mdi-lock-outline"></i><span class="d-none d-sm-inline"> 借用中</span>
                                                 </button>
                                             {/if}
                                             {#if currentUser?.role?.includes('admin')}

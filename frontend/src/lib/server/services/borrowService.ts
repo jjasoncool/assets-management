@@ -147,6 +147,20 @@ export async function borrowAsset(
 
         const asset = await getAsset(pb, assetId);
 
+		try {
+			const activeRecord = await pb.collection(Collections.BorrowRecords).getFirstListItem(
+				`asset = "${assetId}" && (status = "pending" || status = "borrowed" || status = "overdue")`,
+				{ expand: 'asset,user' }
+			);
+			const assetLabel = asset.asset_id || asset.name || assetId;
+			const borrower = activeRecord.expand?.user?.name || activeRecord.expand?.user?.email || '其他使用者';
+			throw new Error(`資產 ${assetLabel} 目前已有有效借用紀錄（${activeRecord.status}，借用人：${borrower}），不可重複借用`);
+		} catch (error: any) {
+			if (error?.status !== 404) {
+				throw error;
+			}
+		}
+
         if (!asset.is_lendable) {
             throw new Error('此資產不提供借用');
         }

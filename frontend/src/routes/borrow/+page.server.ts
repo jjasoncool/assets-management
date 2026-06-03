@@ -19,11 +19,20 @@ export const load: PageServerLoad = async ({ locals }) => {
               : [];
 
         // [新增] 獲取所有可借用的資產列表
-        // 條件：is_lendable 為 true 且 status 為 'active'
-        const borrowableAssets = await pb.collection(Collections.Assets).getFullList({
-            filter: `is_lendable = true && status = 'active'`,
-            sort: 'name'
-        });
+        // 條件：is_lendable 為 true、status 為 'active'，且沒有有效借用紀錄
+        const [activeAssets, activeBorrowRecords] = await Promise.all([
+            pb.collection(Collections.Assets).getFullList({
+                filter: `is_lendable = true && status = 'active'`,
+                sort: 'name'
+            }),
+            pb.collection(Collections.BorrowRecords).getFullList({
+                filter: `status = "pending" || status = "borrowed" || status = "overdue"`,
+                fields: 'asset'
+            })
+        ]);
+
+        const unavailableAssetIds = new Set(activeBorrowRecords.map((record: any) => record.asset));
+        const borrowableAssets = activeAssets.filter((asset: any) => !unavailableAssetIds.has(asset.id));
 
         return {
             borrowableAssets: JSON.parse(JSON.stringify(borrowableAssets)),
