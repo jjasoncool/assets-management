@@ -4,12 +4,17 @@ import { logger } from '$lib/utils/logger';
 import { isAdmin, getUsersList } from '$lib/server/services/userService';
 import { calculateNextAssetIdAndSequence } from '$lib/server/services/assetService';
 import { normalizeDateForComparison } from '$lib/utils/datetime';
-import type { Asset, AssetCategory, User } from '$lib/types';
+import type { Asset, AssetCategory } from '$lib/types';
 import * as XLSX from 'xlsx';
 
 const normalizeComparableValue = (value: unknown) => {
     if (value === undefined || value === null) return '';
     return String(value).trim();
+};
+
+const normalizeMultilineValue = (value: unknown) => {
+    if (value === undefined || value === null) return '';
+    return String(value).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 };
 
 const compareTextFields = [
@@ -32,23 +37,143 @@ const compareNumberFields = [
     'total_risk_score'
 ] as const;
 
+const fieldLabels: Record<string, string> = {
+    category: '資產類別',
+    name: '資產名稱',
+    brand: '品牌',
+    model: '型號',
+    serial_number: '序號',
+    purchase_date: '購買日期',
+    warranty_years: '原廠維護年限',
+    location: '存放位置',
+    department: '部門',
+    assigned_to: '保管人',
+    notes: '備註',
+    confidentiality_score: '機密性',
+    integrity_score: '完整性',
+    availability_score: '可用性',
+    total_risk_score: '風險總分'
+};
+
+type DisplayMaps = {
+    categories?: Map<string, string>;
+    users?: Map<string, string>;
+};
+
+type ImportChange = {
+    field: string;
+    label: string;
+    before: string;
+    after: string;
+};
+
+type ImportResult = {
+    success: boolean;
+    action?: 'created' | 'updated' | 'unchanged' | 'failed' | 'skipped';
+    message: string;
+    asset_id?: string;
+    changes?: ImportChange[];
+    data?: Record<string, unknown>;
+};
+
+const formatChangeValue = (field: string, value: unknown, displayMaps?: DisplayMaps) => {
+    if (field === 'purchase_date') {
+        return normalizeDateForComparison(value) || '空白';
+    }
+
+    if (field === 'notes') {
+        return normalizeMultilineValue(value) || '空白';
+    }
+
+    const normalizedValue = normalizeComparableValue(value);
+    if (!normalizedValue) return '空白';
+
+    if (field === 'category') {
+        return displayMaps?.categories?.get(normalizedValue) || normalizedValue;
+    }
+
+    if (field === 'assigned_to') {
+        return displayMaps?.users?.get(normalizedValue) || normalizedValue;
+    }
+
+    return normalizedValue;
+};
+
 const isBlankExcelRow = (row: Record<string, unknown>) => {
     return Object.values(row).every(value => normalizeComparableValue(value) === '');
 };
 
-const isAssetDataUnchanged = (existingAsset: Record<string, any>, assetData: Record<string, any>) => {
-    const textFieldsUnchanged = compareTextFields.every(field =>
-        normalizeComparableValue(existingAsset[field]) === normalizeComparableValue(assetData[field])
-    );
+const buildImportDetail = (
+    rowData: Record<string, any>,
+    categoryName: string,
+    assetId: string,
+    sheetName: string,
+    rowIndex: number,
+    assignedToDisplay: string
+) => ({
+    sheetName,
+    rowIndex,
+    asset_id: assetId,
+    name: rowData.name,
+    category: categoryName,
+    brand: rowData.brand,
+    model: rowData.model,
+    serial_number: rowData.serial_number,
+    purchase_date: normalizeDateForComparison(rowData.purchase_date),
+    warranty_years: rowData.warranty_years,
+    location: rowData.location,
+    department: rowData.department,
+    assigned_to: assignedToDisplay,
+    notes: rowData.notes,
+    confidentiality_score: rowData.confidentiality_score,
+    integrity_score: rowData.integrity_score,
+    availability_score: rowData.availability_score,
+    total_risk_score:
+        rowData.confidentiality_score + rowData.integrity_score + rowData.availability_score
+});
 
-    const numberFieldsUnchanged = compareNumberFields.every(field =>
-        Number(existingAsset[field] || 0) === Number(assetData[field] || 0)
-    );
+const getAssetChanges = (
+    existingAsset: Record<string, any>,
+    assetData: Record<string, any>,
+    displayMaps?: DisplayMaps
+): ImportChange[] => {
+    const changes: ImportChange[] = [];
+
+    for (const field of compareTextFields) {
+        const normalizeValue = field === 'notes' ? normalizeMultilineValue : normalizeComparableValue;
+        if (normalizeValue(existingAsset[field]) !== normalizeValue(assetData[field])) {
+            changes.push({
+                field,
+                label: fieldLabels[field],
+                before: formatChangeValue(field, existingAsset[field], displayMaps),
+                after: formatChangeValue(field, assetData[field], displayMaps)
+            });
+        }
+    }
+
+    for (const field of compareNumberFields) {
+        if (Number(existingAsset[field] || 0) !== Number(assetData[field] || 0)) {
+            changes.push({
+                field,
+                label: fieldLabels[field],
+                before: formatChangeValue(field, existingAsset[field], displayMaps),
+                after: formatChangeValue(field, assetData[field], displayMaps)
+            });
+        }
+    }
 
     const purchaseDateUnchanged =
         normalizeDateForComparison(existingAsset.purchase_date) === normalizeDateForComparison(assetData.purchase_date);
+    if (!purchaseDateUnchanged) {
+        changes.push({
+            field: 'purchase_date',
+            label: fieldLabels.purchase_date,
+            before: formatChangeValue('purchase_date', existingAsset.purchase_date, displayMaps),
+            after: formatChangeValue('purchase_date', assetData.purchase_date, displayMaps)
+        });
+    }
 
-    return textFieldsUnchanged && numberFieldsUnchanged && purchaseDateUnchanged;
+    return changes;
 };
 
 /**
@@ -111,7 +236,7 @@ export const actions: Actions = {
         }
 
         const pb = locals.pb;
-        const results: { success: boolean; message: string; data?: any }[] = [];
+        const results: ImportResult[] = [];
         let createdCount = 0;
         let updatedCount = 0;
         let skippedCount = 0;
@@ -135,12 +260,16 @@ export const actions: Actions = {
                 categoryMap.set(safeName, c);
             }
 
+            const categoryDisplayMap = new Map<string, string>(allCategories.map(c => [c.id, c.name]));
+
             // 建立 name -> user 對應，避免在迴圈中重複查詢資料庫
             const userMap = new Map<string, any>();
+            const userDisplayMap = new Map<string, string>();
             for (const u of allUsers) {
                 if (u.name) userMap.set(u.name, u);
                 // 也可以支援用 email 搜尋
                 if (u.email) userMap.set(u.email, u);
+                userDisplayMap.set(u.id, u.name || u.email || u.id);
             }
 
             // 追蹤記憶體中的 sequence 遞增
@@ -190,7 +319,7 @@ export const actions: Actions = {
                             location: String(row['存放位置'] || row['Location'] || '').trim(),
                             department: String(row['部門'] || row['Department'] || '').trim(),
                             assigned_to_username: String(row['保管人'] || row['Assigned To'] || '').trim(),
-                            notes: String(row['備註'] || row['Notes'] || '').trim(),
+                            notes: normalizeMultilineValue(row['備註'] ?? row['Notes'] ?? ''),
                             confidentiality_score: Number(row['機密性'] || row['Confidentiality']) || 0,
                             integrity_score: Number(row['完整性'] || row['Integrity']) || 0,
                             availability_score: Number(row['可用性'] || row['Availability']) || 0
@@ -204,12 +333,14 @@ export const actions: Actions = {
 
                             // 從記憶體中尋找保管人
                             let assigned_to_user_id = '';
+                            let assignedToDisplay = '';
                             if (rowData.assigned_to_username) {
                                 const matchedUser = userMap.get(rowData.assigned_to_username);
                                 if (!matchedUser) {
                                     throw new Error(`找不到保管人: ${rowData.assigned_to_username}`);
                                 }
                                 assigned_to_user_id = matchedUser.id;
+                                assignedToDisplay = matchedUser.name || matchedUser.email || matchedUser.id;
                             }
 
                             const total_risk_score = rowData.confidentiality_score + rowData.integrity_score + rowData.availability_score;
@@ -237,15 +368,34 @@ export const actions: Actions = {
                                 // Update 邏輯：有提供 asset_id
                                 try {
                                     const existingAsset = await pb.collection('assets').getFirstListItem(`asset_id="${rowData.asset_id}"`);
-                                    if (isAssetDataUnchanged(existingAsset, baseAssetData)) {
-                                        results.push({ success: true, message: `資產 ${rowData.asset_id} 無變更，已略過更新。` });
+                                    const changes = getAssetChanges(existingAsset, baseAssetData, {
+                                        categories: categoryDisplayMap,
+                                        users: userDisplayMap
+                                    });
+
+                                    if (changes.length === 0) {
+                                        results.push({ success: true, action: 'unchanged', asset_id: rowData.asset_id, message: `資產 ${rowData.asset_id} 無變更，已略過更新。` });
                                         skippedCount++;
                                         unchangedCount++;
                                         continue;
                                     }
 
                                     await pb.collection('assets').update(existingAsset.id, baseAssetData);
-                                    results.push({ success: true, message: `成功更新資產 ${rowData.asset_id}` });
+                                    results.push({
+                                        success: true,
+                                        action: 'updated',
+                                        asset_id: rowData.asset_id,
+                                        message: `成功更新資產 ${rowData.asset_id}`,
+                                        changes,
+                                        data: buildImportDetail(
+                                            rowData,
+                                            category.name,
+                                            rowData.asset_id,
+                                            sheetName,
+                                            rowIndex,
+                                            assignedToDisplay
+                                        )
+                                    });
                                     updatedCount++;
                                 } catch (err: any) {
                                     if (err.status === 404) {
@@ -275,7 +425,20 @@ export const actions: Actions = {
                                 categorySequences.set(category.id, newSequence);
                                 updatedCategories.add(category.id);
 
-                                results.push({ success: true, message: `成功建立資產 ${new_asset_id}` });
+                                results.push({
+                                    success: true,
+                                    action: 'created',
+                                    asset_id: new_asset_id,
+                                    message: `成功建立資產 ${new_asset_id}`,
+                                    data: buildImportDetail(
+                                        rowData,
+                                        category.name,
+                                        new_asset_id,
+                                        sheetName,
+                                        rowIndex,
+                                        assignedToDisplay
+                                    )
+                                });
                                 createdCount++;
                             }
 
@@ -284,6 +447,7 @@ export const actions: Actions = {
                             const errorMessage = err instanceof Error ? err.message : '未知錯誤';
                             results.push({
                                 success: false,
+                                action: 'failed',
                                 message: `[${sheetName}] 第 ${rowIndex} 行處理失敗: ${errorMessage}`,
                                 data: rowData
                             });

@@ -13,6 +13,16 @@
     let activeTab = $state<'import' | 'export'>('export');
     let isLoading = $state(false);
 
+    const displayValue = (value: unknown) => {
+        if (value === undefined || value === null || value === '') return '—';
+        return String(value);
+    };
+
+    const getResultDetail = (result: { data?: unknown }) => {
+        if (!result.data || typeof result.data !== 'object') return {} as Record<string, unknown>;
+        return result.data as Record<string, unknown>;
+    };
+
     // ------------------------------
     // 匯出功能 (Export Logic)
     // ------------------------------
@@ -64,8 +74,7 @@
                         '備註': asset.notes || '',
                         '機密性': asset.confidentiality_score || '',
                         '完整性': asset.integrity_score || '',
-                        '可用性': asset.availability_score || '',
-                        '風險總分': asset.total_risk_score || ''
+                        '可用性': asset.availability_score || ''
                     });
                 }
 
@@ -195,6 +204,7 @@
                                 <li><strong>新增資產：</strong> 保持「財產編號」欄位為空白，系統會自動分配新編號。</li>
                                 <li><strong>更新資產：</strong> 填寫既有的「財產編號」(如 PC0001)，系統會更新該筆資產的其他欄位。</li>
                                 <li><strong>目前狀態：</strong> 僅供匯出參考，匯入時不會新增或更新資產狀態。</li>
+                                <li><strong>風險總分：</strong> 由系統依「機密性 + 完整性 + 可用性」自動計算，匯出範本不提供手動填寫欄位。</li>
                                 <li>日期格式建議設定為 <code>YYYY-MM-DD</code>。</li>
                             </ul>
                         </div>
@@ -249,6 +259,98 @@
                                     </div>
                                 </div>
                             </div>
+
+                            {#if form.results.some(r => r.success && r.action === 'created')}
+                                <h6 class="fw-bold text-success mb-3">
+                                    <i class="mdi mdi-plus-circle-outline me-1"></i>新增成功明細
+                                </h6>
+                                <div class="table-responsive mb-4" style="max-height: 400px;">
+                                    <table class="table table-sm table-bordered table-hover bg-white small mb-0 align-middle">
+                                        <thead class="table-success sticky-top">
+                                            <tr>
+                                                <th style="width: 4%;">#</th>
+                                                <th>財產編號</th>
+                                                <th>資產名稱</th>
+                                                <th>類別</th>
+                                                <th>品牌</th>
+                                                <th>型號</th>
+                                                <th>序號</th>
+                                                <th>部門</th>
+                                                <th>位置</th>
+                                                <th>保管人</th>
+                                                <th>風險總分</th>
+                                                <th>來源</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {#each form.results.filter(r => r.success && r.action === 'created') as res, i}
+                                                {@const detail = getResultDetail(res)}
+                                                <tr>
+                                                    <td class="text-center">{i + 1}</td>
+                                                    <td class="fw-semibold text-nowrap">{displayValue(detail.asset_id || res.asset_id)}</td>
+                                                    <td>{displayValue(detail.name)}</td>
+                                                    <td>{displayValue(detail.category)}</td>
+                                                    <td>{displayValue(detail.brand)}</td>
+                                                    <td>{displayValue(detail.model)}</td>
+                                                    <td>{displayValue(detail.serial_number)}</td>
+                                                    <td>{displayValue(detail.department)}</td>
+                                                    <td>{displayValue(detail.location)}</td>
+                                                    <td>{displayValue(detail.assigned_to)}</td>
+                                                    <td>{displayValue(detail.total_risk_score)}</td>
+                                                    <td class="text-muted text-nowrap">
+                                                        {displayValue(detail.sheetName)} 第 {displayValue(detail.rowIndex)} 行
+                                                    </td>
+                                                </tr>
+                                            {/each}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {/if}
+
+                            {#if form.results.some(r => r.success && r.action === 'updated')}
+                                <h6 class="fw-bold text-info mb-3">
+                                    <i class="mdi mdi-pencil-circle-outline me-1"></i>更新成功明細
+                                </h6>
+                                <div class="d-flex flex-column gap-3 mb-4">
+                                    {#each form.results.filter(r => r.success && r.action === 'updated') as res, i}
+                                        {@const detail = getResultDetail(res)}
+                                        <div class="card border-info bg-white">
+                                            <div class="card-header bg-info bg-opacity-10 d-flex flex-wrap justify-content-between gap-2 py-2">
+                                                <div>
+                                                    <span class="badge bg-info me-2">#{i + 1}</span>
+                                                    <strong>{displayValue(detail.asset_id || res.asset_id)}</strong>
+                                                    <span class="text-muted ms-2">{displayValue(detail.name)}</span>
+                                                </div>
+                                                <small class="text-muted">
+                                                    {displayValue(detail.category)}｜{displayValue(detail.sheetName)} 第 {displayValue(detail.rowIndex)} 行
+                                                </small>
+                                            </div>
+                                            <div class="card-body p-0">
+                                                <div class="table-responsive">
+                                                    <table class="table table-sm table-bordered small mb-0 align-middle">
+                                                        <thead class="table-light">
+                                                            <tr>
+                                                                <th style="width: 20%;">變更欄位</th>
+                                                                <th style="width: 40%;">更新前</th>
+                                                                <th style="width: 40%;">更新後</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {#each res.changes || [] as change}
+                                                                <tr>
+                                                                    <td class="fw-semibold">{change.label}</td>
+                                                                    <td class="text-muted">{displayValue(change.before)}</td>
+                                                                    <td>{displayValue(change.after)}</td>
+                                                                </tr>
+                                                            {/each}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {/each}
+                                </div>
+                            {/if}
 
                             {#if form.failedCount > 0}
                                 <h6 class="fw-bold text-danger mb-3">失敗與略過詳情</h6>
