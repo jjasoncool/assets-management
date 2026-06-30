@@ -6,7 +6,7 @@
 	let currentUser = $derived($page.data.currentUser);
 </script>
 
-<nav class="navbar navbar-expand-lg navbar-light bg-light mt-3">
+<nav class="navbar navbar-expand-lg navbar-light bg-light mt-3 app-navbar">
     <div class="container-fluid">
         <a class="navbar-brand d-flex align-items-center" href="/">
             <i class="mdi mdi-office-building me-2"></i>
@@ -40,6 +40,7 @@
                     <a
                         class="nav-link dropdown-toggle"
                         class:active={$page.url.pathname.startsWith('/assets') ||
+                            $page.url.pathname.startsWith('/asset-labels') ||
                             $page.url.pathname.startsWith('/asset-categories')}
                         href="#!"
                         id="assetsDropdown"
@@ -53,7 +54,7 @@
                         <li>
                             <a
                                 class="dropdown-item"
-                                class:active={$page.url.pathname.startsWith('/assets') && !$page.url.pathname.startsWith('/assets/bulk')}
+                                class:active={$page.url.pathname === '/assets'}
                                 href="/assets"
                                 ><i class="mdi mdi-format-list-bulleted me-2"></i>資產清單</a
                             >
@@ -74,6 +75,14 @@
                                     class:active={$page.url.pathname.startsWith('/assets/bulk')}
                                     href="/assets/bulk"
                                     ><i class="mdi mdi-file-excel-outline me-2"></i>大量匯入/匯出</a
+                                >
+                            </li>
+                            <li>
+                                <a
+                                    class="dropdown-item"
+                                    class:active={$page.url.pathname.startsWith('/asset-labels')}
+                                    href="/asset-labels"
+                                    ><i class="mdi mdi-qrcode me-2"></i>資產標籤</a
                                 >
                             </li>
                         {/if}
@@ -247,6 +256,11 @@
 </nav>
 
 <style>
+    .app-navbar {
+        position: relative;
+        z-index: 1030;
+    }
+
     .navbar-brand {
         font-size: 1.25rem;
     }
