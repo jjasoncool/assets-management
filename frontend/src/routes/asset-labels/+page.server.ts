@@ -13,6 +13,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     const search = url.searchParams.get('search')?.trim() || '';
     const status = url.searchParams.get('status') || 'active';
     const category = url.searchParams.get('category') || '';
+    const labelPrinted = url.searchParams.get('labelPrinted') || 'false';
 
     const filterParts: string[] = [];
 
@@ -31,12 +32,16 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         filterParts.push(`category = "${escapePocketBaseValue(category)}"`);
     }
 
+    if (labelPrinted === 'true' || labelPrinted === 'false') {
+        filterParts.push(`label_printed = ${labelPrinted}`);
+    }
+
     try {
         const [assets, categories] = await Promise.all([
             locals.pb.collection(Collections.Assets).getFullList({
                 batch: 5000,
                 filter: filterParts.join(' && '),
-                sort: 'asset_id',
+                sort: 'label_printed,asset_id',
                 expand: 'category,assigned_to'
             }),
             locals.pb.collection(Collections.AssetCategories).getFullList({
@@ -51,7 +56,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
             filters: {
                 search,
                 status,
-                category
+                category,
+                labelPrinted
             }
         };
     } catch (err) {

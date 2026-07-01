@@ -96,6 +96,7 @@ export interface Asset {
     total_risk_score?: number;
     status: 'active' | 'inactive' | 'maintenance' | 'retired' | 'lost' | 'stolen' | 'borrowed';
     is_lendable: boolean; // 是否可借用
+    label_printed?: boolean; // 是否已列印資產標籤
     requires_approval?: boolean;
     notes?: string;
     created: string;

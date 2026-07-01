@@ -12,6 +12,7 @@
     let searchQuery = $state("");
     let statusFilter = $state("active");
     let categoryFilter = $state("");
+    let labelPrintedFilter = $state("false");
     let selectedAssetIds = $state<string[]>([]);
     let startSlot = $state(1);
     let isGenerating = $state(false);
@@ -83,6 +84,19 @@
         if (searchQuery.trim()) params.set("search", searchQuery.trim());
         if (statusFilter) params.set("status", statusFilter);
         if (categoryFilter) params.set("category", categoryFilter);
+        params.set("labelPrinted", labelPrintedFilter);
+        goto(`/asset-labels?${params.toString()}`);
+    }
+
+    function updateLabelPrintedFilter(value: "false" | "true") {
+        labelPrintedFilter = value;
+        selectedAssetIds = [];
+
+        const params = new URLSearchParams();
+        if (searchQuery.trim()) params.set("search", searchQuery.trim());
+        if (statusFilter) params.set("status", statusFilter);
+        if (categoryFilter) params.set("category", categoryFilter);
+        params.set("labelPrinted", value);
         goto(`/asset-labels?${params.toString()}`);
     }
 
@@ -90,7 +104,8 @@
         searchQuery = "";
         statusFilter = "active";
         categoryFilter = "";
-        goto("/asset-labels?status=active");
+        labelPrintedFilter = "false";
+        goto("/asset-labels?status=active&labelPrinted=false");
     }
 
     function toggleAssetSelection(assetId: string) {
@@ -202,6 +217,7 @@
         searchQuery = data.filters.search || "";
         statusFilter = data.filters.status || "";
         categoryFilter = data.filters.category || "";
+        labelPrintedFilter = data.filters.labelPrinted || "false";
     });
 
     $effect(() => {
@@ -330,6 +346,22 @@
                             </div>
                         </div>
                         <div class="d-flex flex-wrap gap-2">
+                            <div class="btn-group btn-group-sm" role="group" aria-label="標籤列印狀態篩選">
+                                <button
+                                    class="btn {labelPrintedFilter === 'false' ? 'btn-primary' : 'btn-outline-primary'}"
+                                    type="button"
+                                    onclick={() => updateLabelPrintedFilter("false")}
+                                >
+                                    未列印
+                                </button>
+                                <button
+                                    class="btn {labelPrintedFilter === 'true' ? 'btn-primary' : 'btn-outline-primary'}"
+                                    type="button"
+                                    onclick={() => updateLabelPrintedFilter("true")}
+                                >
+                                    已列印
+                                </button>
+                            </div>
                             <button
                                 class="btn btn-sm btn-outline-secondary"
                                 type="button"

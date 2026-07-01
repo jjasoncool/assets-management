@@ -427,6 +427,16 @@ export async function getAssetsForLabels(pb: PocketBase, assetIds: string[]) {
     return assetIds.map((id) => recordMap.get(id)).filter(Boolean) as Asset[];
 }
 
+export async function markAssetLabelsPrinted(pb: PocketBase, assetIds: string[]) {
+    if (assetIds.length === 0) return;
+
+    await Promise.all(
+        assetIds.map((id) => pb.collection('assets').update(id, { label_printed: true }))
+    );
+
+    logger.info(`[AssetLabel] Marked ${assetIds.length} assets as label_printed.`);
+}
+
 export async function generateAssetLabelDocx(assets: Asset[], startSlot: number) {
     const slots = createAssetLabelSlots(assets, startSlot);
     const templateBuffer = await fs.readFile(TEMPLATE_PATH);

@@ -2,7 +2,8 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import {
     assetLabelTemplateInfo,
     generateAssetLabelDocx,
-    getAssetsForLabels
+    getAssetsForLabels,
+    markAssetLabelsPrinted
 } from '$lib/server/services/assetLabelService';
 import { logger } from '$lib/utils/logger';
 
@@ -69,6 +70,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         }
 
         const docxBuffer = await generateAssetLabelDocx(assets, startSlot);
+        await markAssetLabelsPrinted(locals.pb, assetIds);
         const fileName = getDownloadFileName();
 
         return new Response(docxBuffer, {
