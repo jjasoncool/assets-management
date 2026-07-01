@@ -7,6 +7,32 @@ import { normalizeDateForComparison } from '$lib/utils/datetime';
 import type { Asset, AssetCategory } from '$lib/types';
 import * as XLSX from 'xlsx';
 
+const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
+
+const normalizeExcelDateSerial = (value: number) => {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (!parsed) return '';
+
+    return [
+        String(parsed.y).padStart(4, '0'),
+        String(parsed.m).padStart(2, '0'),
+        String(parsed.d).padStart(2, '0')
+    ].join('-');
+};
+
+const normalizeImportedPurchaseDate = (value: unknown, rowIndex: number) => {
+    if (value === undefined || value === null || value === '') return undefined;
+
+    const normalizedDate = typeof value === 'number'
+        ? normalizeExcelDateSerial(value)
+        : normalizeDateForComparison(value);
+
+    if (dateOnlyPattern.test(normalizedDate)) return normalizedDate;
+
+    logger.warn(`Invalid purchase date format at row ${rowIndex}: ${String(value)}`);
+    return undefined;
+};
+
 const normalizeComparableValue = (value: unknown) => {
     if (value === undefined || value === null) return '';
     return String(value).trim();
@@ -297,16 +323,10 @@ export const actions: Actions = {
                             continue;
                         }
 
-                        // 嘗試解析日期，並處理無效日期的錯誤
-                        let parsedDate: string | undefined = undefined;
-                        if (row['購買日期'] || row['Purchase Date']) {
-                            const dateVal = row['購買日期'] || row['Purchase Date'];
-                            try {
-                                parsedDate = new Date(dateVal).toISOString();
-                            } catch (e) {
-                                logger.warn(`Invalid date format at row ${rowIndex}: ${dateVal}`);
-                            }
-                        }
+                        const parsedDate = normalizeImportedPurchaseDate(
+                            row['購買日期'] || row['Purchase Date'],
+                            rowIndex
+                        );
 
                         const rowData = {
                             asset_id: String(row['財產編號'] || row['Asset ID'] || '').trim(),

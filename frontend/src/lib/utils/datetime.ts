@@ -43,30 +43,44 @@ function formatDate(date: string | Date | null | undefined, formatString = 'yyyy
 }
 
 /**
+ * 將日期值正規化為 yyyy-MM-dd，專門處理「只有日期、沒有時間語意」的欄位。
+ *
+ * 注意：資產購買日期這類欄位代表日曆日期，不應被 UTC/local timezone 轉換成前一天或後一天。
+ * - 字串若已包含 yyyy-MM-dd / yyyy/MM/dd / yyyy.M.d，優先直接取日曆日期。
+ * - Date 物件則以系統預設時區格式化，避免直接 toISOString() 造成 UTC 日期偏移。
+ */
+function normalizeDateOnly(date: unknown): string {
+	if (!date) return '';
+
+	if (date instanceof Date && !Number.isNaN(date.getTime())) {
+		return formatInTimeZone(date, TIMEZONE, 'yyyy-MM-dd');
+	}
+
+	const rawValue = String(date).trim();
+	if (!rawValue) return '';
+
+	const dateOnlyMatch = rawValue.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+	if (dateOnlyMatch) {
+		const [, year, month, day] = dateOnlyMatch;
+		return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+	}
+
+	const parsedDate = parseISO(rawValue.replace(' ', 'T'));
+	if (!Number.isNaN(parsedDate.getTime())) {
+		return formatInTimeZone(parsedDate, TIMEZONE, 'yyyy-MM-dd');
+	}
+
+	return rawValue;
+}
+
+/**
  * 將日期值正規化為 yyyy-MM-dd，供資料比對使用。
  * 支援 Date、ISO 字串、PocketBase 的 "YYYY-MM-DD HH:mm:ss.SSSZ" 字串。
  * @param {unknown} date - 日期值
  * @returns {string} - yyyy-MM-dd；空值回傳空字串；無法解析時回傳 trim 後原字串
  */
 function normalizeDateForComparison(date: unknown): string {
-	if (!date) return '';
-
-	if (date instanceof Date && !Number.isNaN(date.getTime())) {
-		return date.toISOString().split('T')[0];
-	}
-
-	const rawValue = String(date).trim();
-	if (!rawValue) return '';
-
-	const directDateMatch = rawValue.match(/^(\d{4}-\d{2}-\d{2})/);
-	if (directDateMatch) return directDateMatch[1];
-
-	const parsedDate = parseISO(rawValue.replace(' ', 'T'));
-	if (!Number.isNaN(parsedDate.getTime())) {
-		return parsedDate.toISOString().split('T')[0];
-	}
-
-	return rawValue;
+	return normalizeDateOnly(date);
 }
 
 /**
@@ -99,4 +113,4 @@ function getCalendarEndDate(date: string | Date | null | undefined): string | un
 	}
 }
 
-export { TIMEZONE, formatDateTime, formatDate, normalizeDateForComparison, getCurrentZonedDateString, getCalendarEndDate };
+export { TIMEZONE, formatDateTime, formatDate, normalizeDateOnly, normalizeDateForComparison, getCurrentZonedDateString, getCalendarEndDate };

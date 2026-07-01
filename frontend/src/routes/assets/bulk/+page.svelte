@@ -3,6 +3,7 @@
     import * as XLSX from 'xlsx';
     import { enhance } from '$app/forms';
     import Navbar from '$lib/components/Navbar.svelte';
+    import { normalizeDateOnly } from '$lib/utils/datetime';
 
     // 從 page.server.ts 取得預載的資料 (用於匯出) 和 form action 的結果
     let { data, form }: { data: PageData; form?: ActionData } = $props();
@@ -66,7 +67,7 @@
                         '品牌': asset.brand || '',
                         '型號': asset.model || '',
                         '序號': asset.serial_number || '',
-                        '購買日期': asset.purchase_date ? asset.purchase_date.split('T')[0] : '',
+                        '購買日期': normalizeDateOnly(asset.purchase_date),
                         '原廠維護年限': asset.warranty_years || '',
                         '存放位置': asset.location || '',
                         '部門': asset.department || '',
