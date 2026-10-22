@@ -7,22 +7,49 @@ import type PocketBase from 'pocketbase';
 import { logger } from '$lib/utils/logger';
 import { Collections } from '$lib/types';
 
+const escapePocketBaseValue = (value: string) => value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+function buildAssetSearchFilter(search: string) {
+    const trimmedSearch = search.trim();
+
+    if (!trimmedSearch) return '';
+
+    const searchableFields = ['name', 'asset_id', 'brand', 'model', 'serial_number', 'notes'];
+    const conditions = searchableFields.map(
+        (field) => `${field} ~ "${escapePocketBaseValue(trimmedSearch)}"`
+    );
+
+    const compactAssetId = trimmedSearch.replace(/-/g, '');
+    const assetIdMatch = compactAssetId.match(/^([a-zA-Z0-9]{2})(\d+)$/);
+
+    if (assetIdMatch) {
+        const [, prefix, sequence] = assetIdMatch;
+        const normalizedAssetId = `${prefix.toUpperCase()}-${sequence.padStart(3, '0')}`;
+
+        if (normalizedAssetId !== trimmedSearch) {
+            conditions.push(`asset_id ~ "${escapePocketBaseValue(normalizedAssetId)}"`);
+        }
+    }
+
+    return `(${conditions.join(' || ')})`;
+}
+
 export const load: PageServerLoad = async ({ locals, url }) => {
     const page = Number(url.searchParams.get('page')) || 1;
-    const search = url.searchParams.get('search') || '';
+    const search = url.searchParams.get('search')?.trim() || '';
     const status = url.searchParams.get('status') || '';
     const category = url.searchParams.get('category') || '';
     const sort = url.searchParams.get('sort') || 'asset_id';
 
-    const filterParts = [];
+    const filterParts: string[] = [];
     if (search) {
-        filterParts.push(`(name ~ "${search}" || asset_id ~ "${search}" || serial_number ~ "${search}" || notes ~ "${search}")`);
+        filterParts.push(buildAssetSearchFilter(search));
     }
     if (status) {
-        filterParts.push(`status = "${status}"`);
+        filterParts.push(`status = "${escapePocketBaseValue(status)}"`);
     }
     if (category) {
-        filterParts.push(`category = "${category}"`);
+        filterParts.push(`category = "${escapePocketBaseValue(category)}"`);
     }
     const filter = filterParts.length > 0 ? filterParts.join(' && ') : '';
 
